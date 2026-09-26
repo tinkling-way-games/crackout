@@ -133,6 +133,32 @@ describe('反射とブロック', () => {
     assert.equal(s.bricks.length, 1, '跳ね返った後にもう1個を削らない');
   });
 
+  it('当たるたびに、ブロック上の当たった点がひびの起点として記録される', () => {
+    const levels = [['....3....1']];
+    const s = launched(levels);
+    const brick = s.bricks[0]!;
+    Object.assign(s.balls[0]!, { x: brick.x + 20, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
+    for (let i = 0; i < 20 && brick.impacts.length === 0; i++) update(s, NO_INPUT, DT, levels);
+    assert.equal(brick.impacts.length, 1);
+    const hit = brick.impacts[0]!;
+    assert.ok(Math.abs(hit.x - 20) < 1, `下辺の、左から 20px の点: ${hit.x}`);
+    assert.ok(Math.abs(hit.y - brick.h) < 1e-6);
+  });
+
+  it('割れたブロックは、割ったボールの速度つきで broken に1フレームだけ載る', () => {
+    const s = launched(ONE_BRICK);
+    const brick = s.bricks[0]!;
+    Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
+    for (let i = 0; i < 20 && s.broken.length === 0; i++) update(s, NO_INPUT, DT, ONE_BRICK);
+    assert.equal(s.broken.length, 1);
+    assert.deepEqual({ x: s.broken[0]!.x, y: s.broken[0]!.y }, { x: brick.x, y: brick.y });
+    // 破片はボールが跳ね返った向きではなく、ぶつかってきた向き (ガラスを押し抜く向き) に飛ぶ
+    assert.ok(s.broken[0]!.vy < 0, `下から上へ割ったので上向き: ${s.broken[0]!.vy}`);
+    assert.ok(s.balls[0]!.vy > 0, 'ボール自体は跳ね返って下向き');
+    update(s, NO_INPUT, DT, ONE_BRICK);
+    assert.equal(s.broken.length, 0, '次のフレームでは空');
+  });
+
   it('大きな dt でもブロックをすり抜けない', () => {
     const s = launched(ONE_BRICK);
     const brick = s.bricks[0]!;

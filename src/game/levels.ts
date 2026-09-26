@@ -50,6 +50,7 @@ export function parseLevel(rows: readonly string[]): Brick[] {
         h: BRICK_HEIGHT,
         hp,
         maxHp: hp,
+        impacts: [],
       });
     });
   });

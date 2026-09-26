@@ -1,4 +1,5 @@
 import { createAudio } from './audio.ts';
+import { addShards, spawnShards, stepShards, type Shard } from './fx/shards.ts';
 import { createGame, pause, update } from './game/game.ts';
 import type { GameState } from './game/types.ts';
 import { createInput } from './input.ts';
@@ -12,7 +13,7 @@ const MAX_FRAME = 0.1;
 declare global {
   interface Window {
     /** E2E テストから状態を覗くための読み取り口 */
-    __breakout?: { readonly state: GameState };
+    __breakout?: { readonly state: GameState; readonly shards: readonly Shard[] };
   }
 }
 
@@ -23,7 +24,14 @@ if (!canvas || !ctx) throw new Error('canvas#game が見つからない');
 const state = createGame();
 const input = createInput(canvas);
 const audio = createAudio();
-window.__breakout = { state };
+/** 割れたガラスの破片 (見た目だけなので、ゲームの状態とは別に持つ) */
+let shards: Shard[] = [];
+window.__breakout = {
+  state,
+  get shards() {
+    return shards;
+  },
+};
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause(state);
@@ -42,12 +50,14 @@ function frame(now: number) {
   while (current && acc >= STEP) {
     update(state, current, STEP);
     if (!input.muted) audio.play(state.events);
+    for (const broken of state.broken) shards = addShards(shards, spawnShards(broken));
+    if (state.phase !== 'paused') shards = stepShards(shards, STEP);
     current = { ...current, action: false, pause: false };
     acc -= STEP;
   }
 
   fitCanvas(canvas!, ctx!);
-  draw(ctx!, state, input.muted);
+  draw(ctx!, state, input.muted, shards);
   requestAnimationFrame(frame);
 }
 

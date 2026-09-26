@@ -1,4 +1,6 @@
 import { HEIGHT, MAX_BOUNCE_ANGLE, WIDTH } from './game/constants.ts';
+import { brickKey, crackPattern, type Crack } from './fx/cracks.ts';
+import type { Shard } from './fx/shards.ts';
 import { LEVELS } from './game/levels.ts';
 import type { Ball, Brick, GameState, Phase, PowerUp, PowerUpKind, Rect } from './game/types.ts';
 
@@ -13,8 +15,8 @@ const COLORS = {
   sub: '#9fb0dd',
 };
 
-/** 耐久値ごとの色 (1: 水色, 2: 緑, 3: 橙) */
-const BRICK_COLORS: Record<number, string> = { 1: '#4fc3f7', 2: '#7bd88f', 3: '#ffb454' };
+/** ガラスの色 (耐久値で色は変えず、厚みとひびで表す) */
+const GLASS = { r: 170, g: 225, b: 255 };
 
 /** アイテムの見た目。色はブロック (水色・緑・橙) と被らないものにする */
 export const POWERUP_STYLES: Record<PowerUpKind, { label: string; color: string; name: string }> = {
@@ -51,14 +53,115 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.fill();
 }
 
+/** ひびの形はブロックごとにキャッシュする (当たった回数が変わったときだけ作り直す) */
+const crackCache = new WeakMap<Brick, { count: number; cracks: Crack[] }>();
+
+function cracksOf(b: Brick): Crack[] {
+  const cached = crackCache.get(b);
+  if (cached && cached.count === b.impacts.length) return cached.cracks;
+  const key = brickKey(b.x, b.y);
+  const cracks = b.impacts.flatMap((impact, i) => crackPattern(impact, b, key, i));
+  crackCache.set(b, { count: b.impacts.length, cracks });
+  return cracks;
+}
+
+function strokeCracks(ctx: CanvasRenderingContext2D, b: Brick, cracks: Crack[]) {
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // 暗い下地 + 明るい線で、ひびの縁が光って見えるようにする
+  for (const [color, width] of [['rgba(5, 20, 40, 0.55)', 2.2], ['rgba(255, 255, 255, 0.9)', 1]] as const) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (const line of cracks) {
+      line.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(b.x + x, b.y + y) : ctx.lineTo(b.x + x, b.y + y)));
+    }
+    ctx.stroke();
+  }
+  // 当たった点は白く砕けた粉のように
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  for (const p of b.impacts) {
+    ctx.beginPath();
+    ctx.arc(b.x + p.x, b.y + p.y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * ガラスのブロック。
+ * - 本体: 半透明のグラデーション (背景の格子が透けて見える)
+ * - 強さ (耐久値の最大): ガラスの厚み = 不透明度と、内側に重なる縁の線の数
+ * - 脆さ (残り耐久): 当たった点から入るひび
+ */
 function drawBrick(ctx: CanvasRenderingContext2D, b: Brick) {
-  ctx.fillStyle = BRICK_COLORS[b.hp] ?? '#ffffff';
-  // 傷んだブロック (hp < maxHp) は少し暗くする
-  ctx.globalAlpha = b.hp < b.maxHp ? 0.75 : 1;
-  roundRect(ctx, b.x, b.y, b.w, b.h, 4);
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fillRect(b.x + 4, b.y + 3, b.w - 8, 3);
+  const { r, g, b: bl } = GLASS;
+  const thick = b.maxHp;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(b.x, b.y, b.w, b.h, 3);
+  const grad = ctx.createLinearGradient(b.x, b.y, b.x + b.w * 0.5, b.y + b.h * 1.6);
+  grad.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${0.2 + 0.1 * thick})`);
+  grad.addColorStop(0.55, `rgba(${r - 60}, ${g - 40}, ${bl - 20}, ${0.06 + 0.07 * thick})`);
+  grad.addColorStop(1, `rgba(${r}, ${g}, ${bl}, ${0.16 + 0.09 * thick})`);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.clip();
+
+  // 斜めに走る映り込み
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.beginPath();
+  ctx.moveTo(b.x + b.w * 0.12, b.y);
+  ctx.lineTo(b.x + b.w * 0.3, b.y);
+  ctx.lineTo(b.x + b.w * 0.18, b.y + b.h);
+  ctx.lineTo(b.x, b.y + b.h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
+  ctx.fillRect(b.x + b.w * 0.34, b.y, b.w * 0.05, b.h);
+
+  // 厚いガラスほど、内側に縁の線が重なって見える
+  for (let i = 1; i < thick; i++) {
+    const inset = i * 3;
+    ctx.strokeStyle = `rgba(220, 245, 255, ${0.4 - i * 0.08})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(b.x + inset, b.y + inset, b.w - inset * 2, b.h - inset * 2, 2);
+    ctx.stroke();
+  }
+
+  if (b.impacts.length > 0) strokeCracks(ctx, b, cracksOf(b));
+  ctx.restore();
+
+  // 外周の縁: 上辺を明るく、下辺を少し暗くして立体感を出す
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(225, 248, 255, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, 3);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.beginPath();
+  ctx.moveTo(b.x + 3, b.y + 1.5);
+  ctx.lineTo(b.x + b.w - 3, b.y + 1.5);
+  ctx.stroke();
+}
+
+function drawShards(ctx: CanvasRenderingContext2D, shards: readonly Shard[]) {
+  const { r, g, b } = GLASS;
+  ctx.save();
+  ctx.lineWidth = 0.8;
+  for (const s of shards) {
+    const alpha = Math.max(0, s.life / s.maxLife);
+    ctx.setTransform(ctx.getTransform().translate(s.x, s.y).rotate(s.angle));
+    ctx.beginPath();
+    s.points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.55 * alpha})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
+    ctx.stroke();
+    ctx.setTransform(ctx.getTransform().rotate(-s.angle).translate(-s.x, -s.y));
+  }
+  ctx.restore();
 }
 
 /**
@@ -126,7 +229,7 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, pierce: boolean) {
   ctx.restore();
 }
 
-export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean): void {
+export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean, shards: readonly Shard[] = []): void {
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
   ctx.fillStyle = COLORS.grid;
@@ -134,6 +237,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
   for (let y = 0; y < HEIGHT; y += 40) ctx.fillRect(0, y, WIDTH, 1);
 
   for (const b of s.bricks) drawBrick(ctx, b);
+  drawShards(ctx, shards);
 
   for (const item of s.powerUps) drawPowerUp(ctx, item);
 

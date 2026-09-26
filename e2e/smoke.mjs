@@ -64,10 +64,21 @@ try {
   await page.keyboard.up('ArrowRight');
   if ((await game()).paddleX <= start.paddleX) fail('→キーでパドルが動かない');
 
-  // 発射して、ブロックに当たって得点が入る
+  // 破片は一瞬で消えるので、出た数の最大値をページ内で毎フレーム記録しておく
+  await page.evaluate(() => {
+    window.__maxShards = 0;
+    const watch = () => {
+      window.__maxShards = Math.max(window.__maxShards, window.__breakout.shards.length);
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  });
+
+  // 発射して、ブロックに当たって得点が入り、割れたガラスの破片が散る
   await page.keyboard.press('Space');
   await waitFor(() => window.__breakout.state.phase === 'playing');
   await waitFor(() => window.__breakout.state.score > 0);
+  await waitFor(() => window.__maxShards > 0);
 
   // 一時停止と再開
   await page.keyboard.press('KeyP');
@@ -116,7 +127,7 @@ try {
 
   if (errors.length) fail(`ブラウザでエラー: ${errors.join(' / ')}`);
   const end = await game();
-  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, bricks ${start.bricks} → ${end.bricks}, powerUps ${JSON.stringify(fx)})`);
+  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, bricks ${start.bricks} → ${end.bricks}, shards ${await page.evaluate(() => window.__maxShards)}, powerUps ${JSON.stringify(fx)})`);
 } catch (e) {
   fail(e instanceof Error ? e.message : String(e));
   await page.screenshot({ path: 'test-results/failure.png' }).catch(() => {});

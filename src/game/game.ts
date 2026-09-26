@@ -55,6 +55,7 @@ export function createGame(levels: Levels = LEVELS, options: GameOptions = {}): 
     effects: { wide: 0, pierce: 0 },
     speed: levelSpeed(0),
     events: [],
+    broken: [],
     dropChance: options.dropChance ?? POWERUP_DROP_CHANCE,
     seed: options.seed ?? (Date.now() | 0),
   };
@@ -217,6 +218,13 @@ function movePowerUps(state: GameState, dt: number): void {
  * damaged: このサブステップですでに削られたブロック。分裂直後の重なったボールが
  * 同じブロックに同時に当たっても、削れるのは1回だけにする
  */
+/** @param vx,vy ぶつかってきたときのボールの速度 (反射前)。破片はこの向きに飛ぶ */
+function breakBrick(state: GameState, brick: Brick, vx: number, vy: number): void {
+  state.broken.push({ x: brick.x, y: brick.y, w: brick.w, h: brick.h, vx, vy });
+  state.events.push('brickBreak');
+  maybeDropPowerUp(state, brick);
+}
+
 function collideBricks(state: GameState, ball: Ball, damaged: Set<Brick>): void {
   const pierce = state.effects.pierce > 0;
   for (let b = 0; b < state.bricks.length; b++) {
@@ -230,24 +238,28 @@ function collideBricks(state: GameState, ball: Ball, damaged: Set<Brick>): void 
       state.score += SCORE_PER_HIT + SCORE_BREAK_BONUS * brick.maxHp;
       state.bricks.splice(b, 1);
       b--;
-      state.events.push('brickBreak');
-      maybeDropPowerUp(state, brick);
+      breakBrick(state, brick, ball.vx, ball.vy);
       continue;
     }
 
     // 反転しなかった接触 (すでに離れつつある) は押し戻すだけでダメージにしない
+    const [inVx, inVy] = [ball.vx, ball.vy];
     if (!reflect(ball, hit)) continue;
     if (damaged.has(brick)) return;
     damaged.add(brick);
     brick.hp -= 1;
+    // 当たった点 (ブロック上でボールに一番近い点) をひびの起点として記録する
+    brick.impacts.push({
+      x: Math.min(brick.w, Math.max(0, ball.x - brick.x)),
+      y: Math.min(brick.h, Math.max(0, ball.y - brick.y)),
+    });
     state.score += SCORE_PER_HIT;
     state.speed = Math.min(BALL_MAX_SPEED, state.speed + BALL_SPEEDUP_PER_HIT);
     for (const other of state.balls) setSpeed(other, state.speed);
     if (brick.hp <= 0) {
       state.score += SCORE_BREAK_BONUS * brick.maxHp;
       state.bricks.splice(b, 1);
-      state.events.push('brickBreak');
-      maybeDropPowerUp(state, brick);
+      breakBrick(state, brick, inVx, inVy);
     } else {
       state.events.push('brickHit');
     }
@@ -326,6 +338,7 @@ function stepBalls(state: GameState, dt: number, levels: Levels): void {
 /** 1フレーム進める。state を直接書き換える */
 export function update(state: GameState, input: Input, dt: number, levels: Levels = LEVELS): void {
   state.events = [];
+  state.broken = [];
 
   if (input.pause) {
     if (state.phase === 'playing') {

@@ -5,9 +5,23 @@ export interface Rect {
   h: number;
 }
 
+/** ボールが当たった点 (ブロック左上からの相対座標)。割れ目の起点として描画に使う */
+export interface Impact {
+  x: number;
+  y: number;
+}
+
 export interface Brick extends Rect {
   hp: number;
   maxHp: number;
+  /** ひびが入った点。当たるたびに1つ増える */
+  impacts: Impact[];
+}
+
+/** 割れたブロック。破片を飛ばすために、割ったボールの速度も持つ */
+export interface BrokenBrick extends Rect {
+  vx: number;
+  vy: number;
 }
 
 export interface Ball {
@@ -71,6 +85,8 @@ export interface GameState {
   speed: number;
   /** 直前の update で起きた出来事 (効果音などに使う) */
   events: GameEvent[];
+  /** 直前の update で割れたブロック (破片の演出に使う) */
+  broken: BrokenBrick[];
   /** アイテムが落ちる確率 (テストで 0 や 1 にできる) */
   dropChance: number;
   /** 乱数の内部状態 */
