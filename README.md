@@ -65,7 +65,8 @@ npm run dev      # 開発用: 保存すると自動で再ビルド (ブラウザ
 
 `main` にマージすると、`.github/workflows/pages.yml` が型チェック・テスト・ビルドをして GitHub Pages に公開する。
 
-- 公開先: `https://tinklingway.github.io/crackout/`
+- 公開先: `https://tinkling-way-games.github.io/crackout/` (2026-09-27 に Organization `tinkling-way-games` へ移管。旧 `tinklingway.github.io/crackout/` からのリダイレクトはない)
+- リポジトリを別のオーナーへ移管すると Pages は引き継がれない (Actions・Issue・PR は引き継がれる)。移管後は上の初回設定をやり直し、手動で公開し直す
 - 初回だけ、リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく
 - Settings → Environments → `github-pages` の Deployment branches に `main` が入っていないと、deploy ジョブが実行前に弾かれる
 - Actions タブの「Deploy to GitHub Pages」から手動で公開し直すこともできる
