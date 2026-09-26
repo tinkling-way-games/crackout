@@ -90,8 +90,10 @@ try {
     s.phase = 'playing';
     Object.assign(s.balls[0], { x: 400, y: 260, vx: 60, vy: -s.speed });
     const p = s.paddle;
-    // ブロックを壊した拍子に自然に落ちているアイテムがあると「全部取った」判定が遅れるので消しておく
+    // ブロックを壊した拍子に自然に落ちているアイテムがあると「全部取った」判定が遅れるので消し、
+    // 確認中に新しく落ちてきた M でボール数が変わらないよう、自然に落ちる確率も 0 にする
     s.powerUps = [];
+    s.dropChance = 0;
     for (const kind of ['wide', 'multi', 'pierce']) {
       s.powerUps.push({ kind, x: p.x + p.w / 2 - 22, y: p.y - 8, w: 44, h: 18 });
     }

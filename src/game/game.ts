@@ -138,36 +138,54 @@ function maybeDropPowerUp(state: GameState, brick: Brick): void {
   });
 }
 
-/** 向きを angle だけ回したボールの複製 */
+/** 縦成分の下限 (速さに対する比)。パドルで返る最も浅い角度 (60°) に合わせる */
+const MIN_VERTICAL = Math.cos((60 * Math.PI) / 180);
+
+/**
+ * 向きを angle だけ回したボールの複製。
+ * 回した結果が水平に近すぎたら、元のボールと同じ上下方向のまま縦成分を確保する
+ * (横に往復し続けたり、上向きのボールから急に下向きの子ができたりするのを防ぐ)。
+ */
 function rotated(ball: Ball, angle: number): Ball {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   let vx = ball.vx * cos - ball.vy * sin;
   let vy = ball.vx * sin + ball.vy * cos;
-  // 回した結果、水平に近くなりすぎたら縦成分を確保する (横に往復し続けるのを防ぐ)
   const speed = Math.hypot(vx, vy);
-  if (Math.abs(vy) < speed * 0.3) {
-    vy = Math.sign(vy || -1) * speed * 0.3;
-    vx = Math.sign(vx) * Math.sqrt(speed * speed - vy * vy);
+  const up = Math.sign(ball.vy || -1);
+  if (Math.sign(vy) !== up || Math.abs(vy) < speed * MIN_VERTICAL) {
+    vy = up * speed * MIN_VERTICAL;
+    vx = Math.sign(vx || 1) * Math.sqrt(speed * speed - vy * vy);
   }
   return { ...ball, vx, vy };
 }
 
+/** 位置も向きもほぼ同じボール (重なって1個に見えるもの) がすでにあるか */
+function hasTwin(balls: readonly Ball[], b: Ball): boolean {
+  return balls.some(
+    (o) => Math.hypot(o.x - b.x, o.y - b.y) < b.r && Math.hypot(o.vx - b.vx, o.vy - b.vy) < Math.hypot(b.vx, b.vy) * 0.02,
+  );
+}
+
 export function applyPowerUp(state: GameState, kind: PowerUpKind): void {
   switch (kind) {
+    // 効果中に取り直すと残り時間に加算する (ため込みすぎないよう上限は2回分)
     case 'wide':
-      state.effects.wide = WIDE_DURATION;
+      state.effects.wide = Math.min(state.effects.wide + WIDE_DURATION, WIDE_DURATION * 2);
       setPaddleWidth(state, PADDLE_WIDTH * WIDE_SCALE);
       return;
     case 'pierce':
-      state.effects.pierce = PIERCE_DURATION;
+      state.effects.pierce = Math.min(state.effects.pierce + PIERCE_DURATION, PIERCE_DURATION * 2);
       return;
     case 'multi': {
-      const spawned: Ball[] = [];
-      for (const ball of state.balls) {
-        spawned.push(rotated(ball, MULTI_SPREAD), rotated(ball, -MULTI_SPREAD));
+      // 続けて取ると ±20° を2回回して元と同じ向きの子ができるので、重なるものは作らない
+      for (const ball of [...state.balls]) {
+        for (const angle of [MULTI_SPREAD, -MULTI_SPREAD]) {
+          if (state.balls.length >= MAX_BALLS) return;
+          const child = rotated(ball, angle);
+          if (!hasTwin(state.balls, child)) state.balls.push(child);
+        }
       }
-      state.balls.push(...spawned.slice(0, Math.max(0, MAX_BALLS - state.balls.length)));
       return;
     }
   }
@@ -194,8 +212,12 @@ function movePowerUps(state: GameState, dt: number): void {
   });
 }
 
-/** ボール1個をブロックと衝突させる */
-function collideBricks(state: GameState, ball: Ball): void {
+/**
+ * ボール1個をブロックと衝突させる。
+ * damaged: このサブステップですでに削られたブロック。分裂直後の重なったボールが
+ * 同じブロックに同時に当たっても、削れるのは1回だけにする
+ */
+function collideBricks(state: GameState, ball: Ball, damaged: Set<Brick>): void {
   const pierce = state.effects.pierce > 0;
   for (let b = 0; b < state.bricks.length; b++) {
     const brick = state.bricks[b]!;
@@ -203,7 +225,8 @@ function collideBricks(state: GameState, ball: Ball): void {
     if (!hit) continue;
 
     if (pierce) {
-      // 貫通: 反射せず、耐久値に関係なく一撃で壊して進み続ける
+      // 貫通: 反射せず、耐久値に関係なく一撃で壊して進み続ける。
+      // 反射しないので「当てるたびに加速」もしない (一度に何個も壊すと急加速してしまうため)
       state.score += SCORE_PER_HIT + SCORE_BREAK_BONUS * brick.maxHp;
       state.bricks.splice(b, 1);
       b--;
@@ -214,6 +237,8 @@ function collideBricks(state: GameState, ball: Ball): void {
 
     // 反転しなかった接触 (すでに離れつつある) は押し戻すだけでダメージにしない
     if (!reflect(ball, hit)) continue;
+    if (damaged.has(brick)) return;
+    damaged.add(brick);
     brick.hp -= 1;
     state.score += SCORE_PER_HIT;
     state.speed = Math.min(BALL_MAX_SPEED, state.speed + BALL_SPEEDUP_PER_HIT);
@@ -238,6 +263,7 @@ function stepBalls(state: GameState, dt: number, levels: Levels): void {
   const sub = dt / steps;
 
   for (let i = 0; i < steps; i++) {
+    const damaged = new Set<Brick>();
     for (const ball of state.balls) {
       ball.x += ball.vx * sub;
       ball.y += ball.vy * sub;
@@ -264,13 +290,17 @@ function stepBalls(state: GameState, dt: number, levels: Levels): void {
         state.events.push('paddle');
       }
 
-      collideBricks(state, ball);
+      collideBricks(state, ball, damaged);
     }
 
     if (state.bricks.length === 0) {
       const last = state.level >= levels.length - 1;
       state.phase = last ? 'won' : 'levelClear';
+      // クリア画面に効果や余分なボールが残って見えないよう、ここで片付ける
       state.powerUps = [];
+      state.effects = { wide: 0, pierce: 0 };
+      setPaddleWidth(state, PADDLE_WIDTH);
+      state.balls = state.balls.slice(0, 1);
       state.events.push(last ? 'won' : 'levelClear');
       return;
     }

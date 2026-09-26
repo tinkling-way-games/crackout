@@ -30,7 +30,7 @@ function launched(levels: string[][] = ONE_BRICK, dropChance = 0): GameState {
 function catchPowerUp(s: GameState, kind: PowerUpKind, levels = ONE_BRICK): void {
   const p = s.paddle;
   s.powerUps.push({ kind, x: p.x + p.w / 2 - POWERUP_WIDTH / 2, y: p.y - POWERUP_HEIGHT - 1, w: POWERUP_WIDTH, h: POWERUP_HEIGHT });
-  // ボールが邪魔しないよう画面上部で横に往復させておく
+  // ボールが邪魔しないよう画面中央でほぼ止めておく (ゆっくり上へ)
   Object.assign(s.balls[0]!, { x: 400, y: 300, vx: 0, vy: -1 });
   update(s, input({ pointerX: p.x + p.w / 2 }), 0.05, levels);
 }
@@ -84,11 +84,11 @@ describe('アイテムの出現と取得', () => {
 
   it('同じシードなら同じアイテムが同じ順で出る', () => {
     const run = () => {
-      const levels = [['1111111111']];
+      const levels = [['1111111111', '1111111111', '1111111111']];
       const s = createGame(levels, { dropChance: 0.5, seed: 123 });
       update(s, input({ action: true }), DT, levels);
       const kinds: string[] = [];
-      for (let i = 0; i < s.bricks.length && i < 10; i++) {
+      for (let i = 0; i < 20; i++) {
         s.powerUps = [];
         shootAt(s, 0);
         for (let t = 0; t < 30 && s.powerUps.length === 0 && s.phase === 'playing'; t++) update(s, NO_INPUT, DT, levels);
@@ -96,7 +96,20 @@ describe('アイテムの出現と取得', () => {
       }
       return kinds.join(',');
     };
-    assert.equal(run(), run());
+    const first = run();
+    assert.equal(first, run());
+    assert.ok(first.split(',').filter((k) => k !== '-').length >= 3, `アイテムが十分に出ていない: ${first}`);
+  });
+
+  it('ゲームオーバーから再開しても乱数は続きから (同じ列を繰り返さない) で、確率も引き継ぐ', () => {
+    const s = createGame(ONE_BRICK, { dropChance: 0.3, seed: 99 });
+    s.phase = 'gameOver';
+    const seed = s.seed;
+    s.seed = seed + 12345;
+    update(s, input({ action: true }), DT, ONE_BRICK);
+    assert.equal(s.phase, 'ready');
+    assert.equal(s.seed, seed + 12345);
+    assert.equal(s.dropChance, 0.3);
   });
 });
 
@@ -123,13 +136,14 @@ describe('W: パドル拡大', () => {
     assert.equal(s.paddle.x + s.paddle.w, WIDTH);
   });
 
-  it('効果中にもう一度取ると時間が延び、幅はそれ以上大きくならない', () => {
+  it('効果中にもう一度取ると残り時間に加算され (上限は2回分)、幅はそれ以上大きくならない', () => {
     const s = launched();
-    catchPowerUp(s, 'wide');
-    for (let i = 0; i < 100; i++) update(s, input({ pointerX: 400 }), 0.05, ONE_BRICK);
-    const before = s.effects.wide;
-    catchPowerUp(s, 'wide');
-    assert.ok(s.effects.wide > before);
+    applyPowerUp(s, 'wide');
+    s.effects.wide = 10;
+    applyPowerUp(s, 'wide');
+    assert.equal(s.effects.wide, 10 + WIDE_DURATION);
+    applyPowerUp(s, 'wide');
+    assert.equal(s.effects.wide, WIDE_DURATION * 2);
     assert.equal(s.paddle.w, PADDLE_WIDTH * WIDE_SCALE);
   });
 });
@@ -147,9 +161,47 @@ describe('M: マルチボール', () => {
     assert.ok(new Set(s.balls.map((b) => b.vx.toFixed(3))).size === 3, '向きがばらける');
   });
 
+  it('ブロックに接した状態で分裂しても、重なったボールで同じブロックを何度も削らない', () => {
+    const levels = [['....3....1']];
+    const s = launched(levels);
+    const brick = s.bricks[0]!;
+    // ブロック下辺に接して上向きに進んでいるボール
+    Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + brick.h + s.balls[0]!.r - 1, vx: 0, vy: -s.speed });
+    applyPowerUp(s, 'multi');
+    const speed = s.speed;
+    update(s, NO_INPUT, DT, levels);
+    assert.equal(brick.hp, 2, '1フレームで削れるのは1だけ');
+    assert.ok(s.speed <= speed + 3 + 1e-9, '加速も1回分だけ');
+  });
+
+  it('続けて取っても、位置も向きも完全に同じボールは生まれない', () => {
+    const s = launched();
+    Object.assign(s.balls[0]!, { x: 400, y: 300, vx: 0, vy: -s.speed });
+    applyPowerUp(s, 'multi');
+    applyPowerUp(s, 'multi');
+    const key = (b: { vx: number; vy: number }) => `${b.vx.toFixed(2)},${b.vy.toFixed(2)}`;
+    assert.equal(new Set(s.balls.map(key)).size, s.balls.length, `重複: ${s.balls.map(key).join(' / ')}`);
+  });
+
+  it('水平に近いボールを分裂させても、元と同じ上下方向で十分な縦成分を持つ', () => {
+    const s = launched();
+    const a = (72.5 * Math.PI) / 180;
+    Object.assign(s.balls[0]!, { x: 400, y: 300, vx: Math.sin(a) * s.speed, vy: -Math.cos(a) * s.speed });
+    applyPowerUp(s, 'multi');
+    for (const b of s.balls.slice(1)) {
+      assert.ok(b.vy < 0, `上向きのボールから下向きの子ができた: vy=${b.vy}`);
+      assert.ok(Math.abs(b.vy) >= s.speed * 0.5 - 1e-9, `水平に近すぎる: vy=${b.vy}`);
+      assert.ok(Math.abs(Math.hypot(b.vx, b.vy) - s.speed) < 1e-6);
+    }
+  });
+
   it(`何度取っても最大 ${MAX_BALLS} 個まで`, () => {
     const s = launched();
-    for (let i = 0; i < 5; i++) applyPowerUp(s, 'multi');
+    for (let i = 0; i < 5; i++) {
+      applyPowerUp(s, 'multi');
+      // 実際のプレイのように、次に取るまでにボール同士は離れている
+      s.balls.forEach((b, j) => Object.assign(b, { x: 40 + j * 60, y: 300 }));
+    }
     assert.equal(s.balls.length, MAX_BALLS);
   });
 
@@ -233,6 +285,20 @@ describe('リセット', () => {
     assert.equal(s.balls.length, 1);
     assert.equal(s.paddle.w, PADDLE_WIDTH);
     assert.deepEqual(s.effects, { wide: 0, pierce: 0 });
+  });
+
+  it('クリアした瞬間に効果と余分なボールが消え、クリア画面に残らない', () => {
+    const levels = [['....1.....'], ['....1.....']];
+    const s = launched(levels);
+    applyPowerUp(s, 'wide');
+    applyPowerUp(s, 'pierce');
+    applyPowerUp(s, 'multi');
+    shootAt(s);
+    for (let i = 0; i < 30 && s.phase === 'playing'; i++) update(s, NO_INPUT, DT, levels);
+    assert.equal(s.phase, 'levelClear');
+    assert.deepEqual(s.effects, { wide: 0, pierce: 0 });
+    assert.equal(s.paddle.w, PADDLE_WIDTH);
+    assert.equal(s.balls.length, 1);
   });
 });
 
