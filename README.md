@@ -65,8 +65,9 @@ npm run dev      # 開発用: 保存すると自動で再ビルド (ブラウザ
 
 `main` にマージすると、`.github/workflows/pages.yml` が型チェック・テスト・ビルドをして GitHub Pages に公開する。
 
-- 公開先: `https://tinklingway.github.io/claude-code-environment/`
+- 公開先: `https://tinklingway.github.io/crackout/`
 - 初回だけ、リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく
+- Settings → Environments → `github-pages` の Deployment branches に `main` が入っていないと、deploy ジョブが実行前に弾かれる
 - Actions タブの「Deploy to GitHub Pages」から手動で公開し直すこともできる
 
 ## 開発
