@@ -125,9 +125,30 @@ try {
   await page.waitForTimeout(300);
   await page.locator('#game').screenshot({ path: 'test-results/playing.png' });
 
-  if (errors.length) fail(`ブラウザでエラー: ${errors.join(' / ')}`);
+  // 再読み込みする前に、ここまでの結果を控えておく
   const end = await game();
-  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, bricks ${start.bricks} → ${end.bricks}, shards ${await page.evaluate(() => window.__maxShards)}, powerUps ${JSON.stringify(fx)})`);
+  const maxShards = await page.evaluate(() => window.__maxShards);
+
+  // ハイスコア: ゲームオーバーにすると記録され、再読み込みしても残っている
+  const finalScore = await page.evaluate(() => {
+    const s = window.__breakout.state;
+    s.lives = 1;
+    s.phase = 'playing';
+    for (const b of s.balls) Object.assign(b, { y: 700, vy: 100 });
+    return s.score;
+  });
+  await waitFor(() => window.__breakout.state.phase === 'gameOver');
+  const board = await page.evaluate(() => window.__breakout.scores);
+  if (board.rank !== 0 || board.ranking[0]?.score !== finalScore) fail(`ハイスコアに記録されていない: ${JSON.stringify(board)}`);
+  await page.waitForTimeout(200);
+  await page.locator('#game').screenshot({ path: 'test-results/gameover.png' });
+  await page.reload();
+  await waitFor(() => window.__breakout !== undefined);
+  const saved = await page.evaluate(() => window.__breakout.scores.ranking);
+  if (saved[0]?.score !== finalScore) fail(`再読み込み後にハイスコアが残っていない: ${JSON.stringify(saved)}`);
+
+  if (errors.length) fail(`ブラウザでエラー: ${errors.join(' / ')}`);
+  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, highScore ${finalScore}, bricks ${start.bricks} → ${end.bricks}, shards ${maxShards}, powerUps ${JSON.stringify(fx)})`);
 } catch (e) {
   fail(e instanceof Error ? e.message : String(e));
   await page.screenshot({ path: 'test-results/failure.png' }).catch(() => {});

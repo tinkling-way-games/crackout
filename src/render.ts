@@ -2,6 +2,7 @@ import { HEIGHT, MAX_BOUNCE_ANGLE, WIDTH } from './game/constants.ts';
 import { brickKey, crackPattern, type Crack } from './fx/cracks.ts';
 import type { Shard } from './fx/shards.ts';
 import { LEVELS } from './game/levels.ts';
+import type { ScoreEntry } from './highscore.ts';
 import type { Ball, Brick, GameState, Phase, PowerUp, PowerUpKind, Rect } from './game/types.ts';
 
 const COLORS = {
@@ -32,6 +33,16 @@ const MESSAGES: Partial<Record<Phase, [title: string, sub: string]>> = {
   gameOver: ['GAME OVER', 'Space / クリック でもう一度'],
   won: ['ALL CLEAR!', 'Space / クリック でもう一度'],
 };
+
+/** ハイスコアの表示に使う情報 */
+export interface ScoreBoard {
+  ranking: readonly ScoreEntry[];
+  /** 直前に終わったゲームの順位 (0 = 1位)。圏外なら null */
+  rank: number | null;
+}
+
+const NO_SCORES: ScoreBoard = { ranking: [], rank: null };
+const GOLD = '#ffd866';
 
 const FONT = 'system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif';
 
@@ -265,7 +276,13 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, pierce: boolean) {
   ctx.restore();
 }
 
-export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean, shards: readonly Shard[] = []): void {
+export function draw(
+  ctx: CanvasRenderingContext2D,
+  s: GameState,
+  muted: boolean,
+  shards: readonly Shard[] = [],
+  scores: ScoreBoard = NO_SCORES,
+): void {
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
   ctx.fillStyle = COLORS.grid;
@@ -315,9 +332,18 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
   ctx.fillText(`STAGE ${s.level + 1} / ${LEVELS.length}`, WIDTH / 2, 32);
   ctx.textAlign = 'right';
   ctx.fillText(`${muted ? '🔇 ' : ''}${'●'.repeat(Math.max(0, s.lives))}`, WIDTH - 20, 32);
+  // ベストスコア。今のプレイがそれを超えたら今のスコアを金色で出す
+  const best = scores.ranking[0]?.score ?? 0;
+  ctx.font = `700 14px ${FONT}`;
+  ctx.fillStyle = s.score > best ? GOLD : COLORS.hud;
+  ctx.fillText(`HI ${Math.max(best, s.score)}`, WIDTH - 20, 56);
 
   const msg = MESSAGES[s.phase];
   if (!msg) return;
+  if (s.phase === 'gameOver' || s.phase === 'won') {
+    drawResult(ctx, s, msg, scores);
+    return;
+  }
   const [title, sub] = msg;
   ctx.textAlign = 'center';
   if (title) {
@@ -326,12 +352,64 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
     ctx.fillStyle = COLORS.title;
     ctx.font = `800 56px ${FONT}`;
     ctx.fillText(title, WIDTH / 2, HEIGHT / 2 - 20);
-    if (s.phase === 'gameOver' || s.phase === 'won') {
-      ctx.font = `600 24px ${FONT}`;
-      ctx.fillText(`SCORE ${s.score}`, WIDTH / 2, HEIGHT / 2 + 30);
-    }
   }
   ctx.fillStyle = COLORS.sub;
   ctx.font = `500 18px ${FONT}`;
   ctx.fillText(sub, WIDTH / 2, title ? HEIGHT / 2 + 70 : HEIGHT / 2 + 80);
+}
+
+/** ゲームオーバー / オールクリアの画面: 今回のスコアとランキング */
+function drawResult(ctx: CanvasRenderingContext2D, s: GameState, [title, sub]: [string, string], scores: ScoreBoard) {
+  ctx.fillStyle = COLORS.overlay;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = COLORS.title;
+  ctx.font = `800 52px ${FONT}`;
+  ctx.fillText(title, WIDTH / 2, 140);
+  ctx.font = `600 24px ${FONT}`;
+  ctx.fillText(`SCORE ${s.score}`, WIDTH / 2, 192);
+  if (scores.rank === 0) {
+    ctx.fillStyle = GOLD;
+    ctx.font = `800 20px ${FONT}`;
+    ctx.fillText('NEW RECORD!', WIDTH / 2, 226);
+  }
+
+  // ランキング (順位・スコア・ステージ・日付)
+  const top = 272;
+  const rowH = 30;
+  const cols = { rank: 236, score: 372, stage: 400, date: 482 };
+  const rowLeft = cols.rank - 14;
+  const rowWidth = 580 - rowLeft;
+  ctx.font = `600 13px ${FONT}`;
+  ctx.fillStyle = COLORS.sub;
+  ctx.textAlign = 'left';
+  ctx.fillText('HIGH SCORES', cols.rank, top);
+  if (scores.ranking.length === 0) {
+    ctx.fillText('まだ記録がない', cols.rank, top + rowH);
+  }
+  scores.ranking.forEach((e, i) => {
+    const y = top + rowH * (i + 1);
+    const mine = i === scores.rank;
+    if (mine) {
+      ctx.fillStyle = 'rgba(255, 216, 102, 0.14)';
+      ctx.fillRect(rowLeft, y - rowH / 2 + 2, rowWidth, rowH - 4);
+    }
+    ctx.fillStyle = mine ? GOLD : COLORS.title;
+    ctx.font = `${mine ? 800 : 600} 17px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${i + 1}.`, cols.rank, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(e.score), cols.score, y);
+    ctx.textAlign = 'left';
+    ctx.font = `500 14px ${FONT}`;
+    ctx.fillStyle = mine ? GOLD : COLORS.sub;
+    ctx.fillText(`STAGE ${e.stage}`, cols.stage, y);
+    ctx.fillText(e.date, cols.date, y);
+  });
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLORS.sub;
+  ctx.font = `500 18px ${FONT}`;
+  ctx.fillText(sub, WIDTH / 2, top + rowH * 6 + 40);
 }

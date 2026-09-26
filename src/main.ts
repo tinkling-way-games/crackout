@@ -2,8 +2,9 @@ import { createAudio } from './audio.ts';
 import { addShards, spawnShards, stepShards, type Shard } from './fx/shards.ts';
 import { createGame, pause, update } from './game/game.ts';
 import type { GameState } from './game/types.ts';
+import { insertScore, loadScores, saveScores, today } from './highscore.ts';
 import { createInput } from './input.ts';
-import { draw, fitCanvas } from './render.ts';
+import { draw, fitCanvas, type ScoreBoard } from './render.ts';
 
 /** 物理は固定の刻み幅で進める。フレームレートが違っても挙動が変わらないように */
 const STEP = 1 / 120;
@@ -13,7 +14,7 @@ const MAX_FRAME = 0.1;
 declare global {
   interface Window {
     /** E2E テストから状態を覗くための読み取り口 */
-    __breakout?: { readonly state: GameState; readonly shards: readonly Shard[] };
+    __breakout?: { readonly state: GameState; readonly shards: readonly Shard[]; readonly scores: ScoreBoard };
   }
 }
 
@@ -24,10 +25,30 @@ if (!canvas || !ctx) throw new Error('canvas#game が見つからない');
 const state = createGame();
 const input = createInput(canvas);
 const audio = createAudio();
+/** localStorage はプライベートブラウズ等で触るだけで例外になることがある */
+function openStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+const storage = openStorage();
+const scores: ScoreBoard = { ranking: loadScores(storage), rank: null };
+
+/** ゲームが終わったらランキングに記録する (オールクリアのときは最後のステージまで到達) */
+function recordScore() {
+  const result = insertScore(scores.ranking, { score: state.score, stage: state.level + 1, date: today() });
+  scores.ranking = result.list;
+  scores.rank = result.rank;
+  if (result.rank !== null) saveScores(storage, result.list);
+}
+
 /** 割れたガラスの破片 (見た目だけなので、ゲームの状態とは別に持つ) */
 let shards: Shard[] = [];
 window.__breakout = {
   state,
+  scores,
   get shards() {
     return shards;
   },
@@ -50,6 +71,7 @@ function frame(now: number) {
   while (current && acc >= STEP) {
     update(state, current, STEP);
     if (!input.muted) audio.play(state.events);
+    if (state.events.includes('gameOver') || state.events.includes('won')) recordScore();
     for (const broken of state.broken) shards = addShards(shards, spawnShards(broken));
     if (state.phase !== 'paused') shards = stepShards(shards, STEP);
     current = { ...current, action: false, pause: false };
@@ -57,7 +79,7 @@ function frame(now: number) {
   }
 
   fitCanvas(canvas!, ctx!);
-  draw(ctx!, state, input.muted, shards);
+  draw(ctx!, state, input.muted, shards, scores);
   requestAnimationFrame(frame);
 }
 
