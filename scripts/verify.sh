@@ -29,7 +29,7 @@ fi
 # Python
 if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
   command -v ruff >/dev/null 2>&1 && run ruff check .
-  if command -v pytest >/dev/null 2>&1 && ls tests test 2>/dev/null | grep -q .; then
+  if command -v pytest >/dev/null 2>&1 && { [ -d tests ] || [ -d test ]; }; then
     run pytest -q
   fi
 fi

@@ -61,6 +61,14 @@ npm run dev      # 開発用: 保存すると自動で再ビルド (ブラウザ
 > `src/game/levels.ts` の `LEVELS` に 10文字 × n行の文字列を足すだけ。`.` が空き、`1`〜`3` が耐久値。
 > 形式の誤りやブロック同士の重なりはテストが検出する。
 
+## 公開 (GitHub Pages)
+
+`main` にマージすると、`.github/workflows/pages.yml` が型チェック・テスト・ビルドをして GitHub Pages に公開する。
+
+- 公開先: `https://tinklingway.github.io/claude-code-environment/`
+- 初回だけ、リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく
+- Actions タブの「Deploy to GitHub Pages」から手動で公開し直すこともできる
+
 ## 開発
 
 ```bash

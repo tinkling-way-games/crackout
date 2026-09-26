@@ -12,6 +12,7 @@ block() { echo "ブロック: $1 (コマンド: $cmd)" >&2; exit 2; }
 match() { printf '%s\n' "$1" | grep -Eq "$2"; }
 
 # ルート/ホーム直下の再帰削除
+# shellcheck disable=SC2016 # コマンド文字列中の「$HOME」という文字そのものを探すので、展開させない
 match "$cmd" 'rm[[:space:]]+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)[a-zA-Z]*[[:space:]]+(/|~|\$HOME)([[:space:]]|$)' \
   && block "ルートまたはホームの再帰削除は禁止"
 # 保護ブランチへの直接 push
