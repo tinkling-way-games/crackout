@@ -10,16 +10,16 @@ Claude の `/autopilot` は `## Ready` の先頭から取っていく。1項目 
 
 ## Doing
 
-- [ ] GitHub Pages への自動デプロイ
+## Done
+
+- [x] GitHub Pages への自動デプロイ
   - 受け入れ条件:
     - [x] main への push で型チェック・テスト・ビルドをして Pages に公開するワークフロー
     - [x] 公開物は index.html と dist/ だけ (ソースやテストは出さない)
     - [x] サブパス (/claude-code-environment/) でゲームが動く (ローカルで同じ構成を再現して確認)
-    - [ ] main ブランチを作り、PR の CI が緑になる
-    - [ ] (ユーザー) Settings → Pages → Source を GitHub Actions にしてマージ
-    - [ ] 公開 URL で動くことを確認
-
-## Done
+    - [x] main ブランチを作り、PR の CI が緑になる
+    - [x] (ユーザー) Settings → Pages → Source を GitHub Actions にしてマージ
+    - [x] 公開 URL で動くことを確認
 
 - [x] ハイスコア
   - 受け入れ条件:
