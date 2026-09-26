@@ -11,5 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: スタックに合わせてセットアップを追加 (actions/setup-node, astral-sh/setup-uv など)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      # E2E 用。package.json に入れると install が重くなるので CI でだけ入れる
+      - run: npm install --no-save playwright && npx playwright install --with-deps chromium
       - run: scripts/verify.sh
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: test-results/
+          if-no-files-found: ignore

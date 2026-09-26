@@ -5,7 +5,13 @@
 
 ## プロジェクト概要
 
-<!-- TODO: 1〜3行で「何を作っているか」「主な技術スタック」を書く -->
+ブラウザで動くブロック崩し。TypeScript を tsc でビルドし、Canvas 2D で描画する。実行時の依存パッケージはゼロ。
+
+- `src/game/`: ゲームロジック。**DOM に触らない純粋な TS** に保つ (Node でそのままテストするため)
+- `src/main.ts` / `render.ts` / `input.ts` / `audio.ts`: ブラウザ側 (ループ・描画・入力・効果音)
+- `tests/`: `node --test` のユニットテスト (Node 22 の型ストリップで .ts を直接実行)
+- `e2e/smoke.mjs`: Playwright で実ブラウザ起動を確かめるスモークテスト
+- Node の型ストリップで動かすため、`enum`・`namespace`・コンストラクタ引数プロパティは使わない (`erasableSyntaxOnly`)。import は `.ts` 拡張子付きで書く
 
 ## 作業ループ (必ずこの順で)
 
@@ -25,8 +31,11 @@
 
 ## コマンド
 
-- 検証: `scripts/verify.sh`
-<!-- TODO: dev サーバー起動、ビルド、個別テストの実行方法などを追記 -->
+- 検証: `scripts/verify.sh` (typecheck → test → build → test:e2e)
+- 開発サーバー: `npm run dev` (tsc --watch + http://localhost:5173)
+- ビルドだけ: `npm run build` (出力は `dist/`)
+- 個別テスト: `node --test tests/game/game.test.ts`
+- 画面を確認したいとき: `npm run test:e2e` が `test-results/*.png` にスクリーンショットを残す
 
 ## 参照
 

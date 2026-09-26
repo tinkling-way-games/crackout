@@ -15,3 +15,14 @@
 - やったこと: CLAUDE.md、settings.json (権限・hooks)、autopilot / steward スキル、reviewer / planner エージェント、verify.sh、GitHub Actions を追加
 - 判断と理由: 言語非依存にするため、検証は `scripts/verify.sh` に集約し、スタックを自動検出する形にした
 - 残課題 / 次にやること: 実プロジェクトのスタックに合わせて CLAUDE.md の TODO と verify.sh を埋める
+
+## 2026-09-26 ブロック崩しの実装
+- やったこと: TypeScript + Canvas のブロック崩しを実装 (3ステージ、耐久値つきブロック、ライフ、一時停止、効果音、キーボード/マウス/タッチ操作)。ロジックのユニットテスト28件と Playwright の E2E スモークテストを追加し、verify.sh に build と test:e2e を組み込んだ
+- 判断と理由:
+  - この環境では npm レジストリがネットワークポリシーで 403 になるため、グローバルに入っている tsc / Playwright だけで完結する構成にした (Vite 等は不使用)。package.json の devDependencies には typescript だけを書いておき、ローカルでは `npm install` で入る
+  - `@types/node` が入れられないので、テストの型チェック用に `tests/node-shim.d.ts` で node:test / node:assert の最小宣言を置いた
+  - ゲームロジックを DOM から切り離し、Node の型ストリップで .ts を直接テストする形にした (ビルド不要で速い)
+  - 物理は 120Hz 固定ステップ + 半径の半分ずつのサブステップですり抜けを防止。反射の法線は軸にそろえて極端な水平軌道を避けた
+- 残課題 / 次にやること:
+  - package-lock.json が未生成 (レジストリに届かないため)。ローカルで `npm install` したらコミットする
+  - アイデア: パワーアップ (パドル拡大・マルチボール)、ハイスコア保存 (localStorage)、GitHub Pages への自動デプロイ
