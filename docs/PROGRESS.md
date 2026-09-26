@@ -140,3 +140,17 @@
   - 自分のリポジトリは同じアカウントにフォークできないため、フォークではなく履歴ごとのコピーにした。元のリポジトリは自走環境のサンプルとして残す
   - コードはリポジトリ名に依存していない (相対パスで読み込む) ので、名前の変更による修正は README だけ。過去の進捗ログ・タスクの旧 URL は当時の記録なのでそのまま
 - 次にやること: ユーザー側で crackout の Pages 設定 (Source を GitHub Actions、github-pages 環境で main を許可) をして、公開 URL で動くことを確認
+
+## 2026-09-27 Organization `tinkling-way-games` への移管と Pages の再公開
+- 状況: ユーザーがリポジトリを個人アカウント `tinklingway` から Organization `tinkling-way-games` に移管 (GitHub の Transfer ownership)。GitHub の Web / git のアクセスは旧 URL からリダイレクトされるが、**GitHub Pages は移管で引き継がれず、新 URL `https://tinkling-way-games.github.io/crackout/` は 404** (2026-09-27 01:50 JST に確認)。移管後に Pages のデプロイはまだ走っていない (最後の成功は移管前の main への push)
+- やったこと: README の公開先 URL を Org 側に更新し、移管時に Pages が引き継がれないことを注記
+- 判断と理由: コードは相対パスで読み込んでいるので、リポジトリのオーナー変更で直すのは README だけ。`pages.yml` はオーナー名を持たない (`<ユーザー名>.github.io/<リポジトリ名>/` の形で自動決定) ので変更不要。過去ログの旧 URL は当時の記録なのでそのまま
+- 残課題 (ユーザー側の設定、コードでは解決できない):
+  1. Org の料金プランの確認。**無料の Organization では private リポジトリの Pages は使えない** (個人の Pro と違い、Org は Team プラン以上が必要)。対応は「crackout を public にする」か「Org を Team にする」のどちらか
+  2. 新リポジトリの Settings → Pages → Source を「GitHub Actions」にする
+  3. Settings → Environments → `github-pages` → Deployment branches に `main` があるか確認 (移管で環境設定が残っているかは要確認)
+  4. Actions タブ → 「Deploy to GitHub Pages」を手動実行 (workflow_dispatch) し、新 URL で動くことを確認
+  5. Actions の Secrets (`CLAUDE_CODE_OAUTH_TOKEN`) が移管後も残っているか確認。消えていれば `claude.yml` (@claude メンション) が動かないので再登録
+  6. 知り合いに配った旧 URL は差し替えが必要 (リダイレクトされない)
+- 次にやること: 上記 1〜4 が済んだら、公開 URL でゲームが動くことを確認して本ログに記録
+
