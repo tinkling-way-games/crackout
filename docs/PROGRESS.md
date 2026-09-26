@@ -133,3 +133,10 @@
 - 公開先: https://tinklingway.github.io/claude-code-environment/ (このクラウド環境からはネットワーク制限で開けないため、表示確認はユーザー側)
 - 判断と理由: マージ済みの作業ブランチは最新の main から作り直して続きの作業をする (マージ済みの PR に積み増さない)
 - 次にやること: 公開ページの表示確認。以降は main にマージするたびに自動公開される
+
+## 2026-09-26 crackout リポジトリへの移行
+- やったこと: ゲームを知り合いに公開するため、`claude-code-environment` の main の履歴をそのまま新リポジトリ `tinklingway/crackout` (private) に push した。README の公開先を `https://tinklingway.github.io/crackout/` に更新し、Pages 初回設定の注意点 (github-pages 環境のデプロイ許可ブランチ) を追記
+- 判断と理由:
+  - 自分のリポジトリは同じアカウントにフォークできないため、フォークではなく履歴ごとのコピーにした。元のリポジトリは自走環境のサンプルとして残す
+  - コードはリポジトリ名に依存していない (相対パスで読み込む) ので、名前の変更による修正は README だけ。過去の進捗ログ・タスクの旧 URL は当時の記録なのでそのまま
+- 次にやること: ユーザー側で crackout の Pages 設定 (Source を GitHub Actions、github-pages 環境で main を許可) をして、公開 URL で動くことを確認
