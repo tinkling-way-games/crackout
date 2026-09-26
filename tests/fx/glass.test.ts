@@ -33,6 +33,21 @@ describe('crackPattern (割れ目)', () => {
     }
   });
 
+  it('左右の縁・角に当たったときも、ひびは内側へ伸びる', () => {
+    const cases = [
+      { impact: { x: 0, y: 12 }, inside: (p: readonly [number, number]) => p[0] > 0 },
+      { impact: { x: 72, y: 12 }, inside: (p: readonly [number, number]) => p[0] < 72 },
+      { impact: { x: 0, y: 0 }, inside: (p: readonly [number, number]) => p[0] > 0 && p[1] > 0 },
+      { impact: { x: 72, y: 24 }, inside: (p: readonly [number, number]) => p[0] < 72 && p[1] < 24 },
+    ];
+    for (const { impact: at, inside } of cases) {
+      for (let k = 0; k < 10; k++) {
+        const rays = crackPattern(at, SIZE, brickKey(k * 76, 132), 0).filter((c) => c.length > 2);
+        for (const ray of rays) assert.ok(inside(ray[1]!), `(${at.x},${at.y}) から外へ向かうひび: ${ray[1]}`);
+      }
+    }
+  });
+
   it('2回目以降の当たりほどひびの本数が多く、長い', () => {
     const key = brickKey(40, 100);
     const measure = (index: number) => {

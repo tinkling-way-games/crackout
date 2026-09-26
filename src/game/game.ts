@@ -213,11 +213,6 @@ function movePowerUps(state: GameState, dt: number): void {
   });
 }
 
-/**
- * ボール1個をブロックと衝突させる。
- * damaged: このサブステップですでに削られたブロック。分裂直後の重なったボールが
- * 同じブロックに同時に当たっても、削れるのは1回だけにする
- */
 /** @param vx,vy ぶつかってきたときのボールの速度 (反射前)。破片はこの向きに飛ぶ */
 function breakBrick(state: GameState, brick: Brick, vx: number, vy: number): void {
   state.broken.push({ x: brick.x, y: brick.y, w: brick.w, h: brick.h, vx, vy });
@@ -225,6 +220,11 @@ function breakBrick(state: GameState, brick: Brick, vx: number, vy: number): voi
   maybeDropPowerUp(state, brick);
 }
 
+/**
+ * ボール1個をブロックと衝突させる。
+ * damaged: このサブステップですでに削られたブロック。分裂直後の重なったボールが
+ * 同じブロックに同時に当たっても、削れるのは1回だけにする
+ */
 function collideBricks(state: GameState, ball: Ball, damaged: Set<Brick>): void {
   const pierce = state.effects.pierce > 0;
   for (let b = 0; b < state.bricks.length; b++) {

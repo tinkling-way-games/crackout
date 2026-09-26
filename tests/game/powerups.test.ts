@@ -174,6 +174,21 @@ describe('M: マルチボール', () => {
     assert.ok(s.speed <= speed + 3 + 1e-9, '加速も1回分だけ');
   });
 
+  it('重なった2つのボールが同じフレームで当たっても、ひびもダメージも1回分', () => {
+    const levels = [['....2....1']];
+    const s = launched(levels);
+    const brick = s.bricks[0]!;
+    const base = { y: brick.y + brick.h + s.balls[0]!.r - 1, vx: 0, vy: -s.speed, r: s.balls[0]!.r };
+    s.balls = [
+      { ...base, x: brick.x + 30 },
+      { ...base, x: brick.x + 31 },
+    ];
+    update(s, NO_INPUT, DT, levels);
+    assert.equal(brick.hp, 1);
+    assert.equal(brick.impacts.length, 1);
+    assert.deepEqual(s.events.filter((e) => e.startsWith('brick')), ['brickHit']);
+  });
+
   it('続けて取っても、位置も向きも完全に同じボールは生まれない', () => {
     const s = launched();
     Object.assign(s.balls[0]!, { x: 400, y: 300, vx: 0, vy: -s.speed });
@@ -237,6 +252,19 @@ describe('P: 貫通', () => {
     for (let i = 0; i < 40; i++) update(s, NO_INPUT, DT, levels);
     assert.equal(s.bricks.length, 1, '縦に並んだ3個を1回で貫く');
     assert.ok(s.score >= 3 * (10 + 40 * 3));
+  });
+
+  it('貫通で割ったブロックも破片用に記録され、向きはボールの進む向きのまま (ひびは記録しない)', () => {
+    const levels = [['....3....1']];
+    const s = launched(levels);
+    applyPowerUp(s, 'pierce');
+    const brick = s.bricks[0]!;
+    Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 50, vy: -300 });
+    for (let i = 0; i < 20 && s.broken.length === 0; i++) update(s, NO_INPUT, DT, levels);
+    assert.equal(s.broken.length, 1);
+    assert.deepEqual([s.broken[0]!.vx, s.broken[0]!.vy], [50, -300]);
+    assert.deepEqual([s.balls[0]!.vx, s.balls[0]!.vy], [50, -300], 'ボールも曲がらない');
+    assert.equal(brick.impacts.length, 0);
   });
 
   it(`${PIERCE_DURATION}秒で切れ、その後は普通に跳ね返る`, () => {

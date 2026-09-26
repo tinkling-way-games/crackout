@@ -27,6 +27,44 @@ export const METAL_BAR_PARTIALS: readonly { ratio: number; gain: number; decay: 
 /** 同時に鳴らす金属音の上限 (貫通で一度に大量に割っても音が割れないように) */
 const MAX_RINGING = 6;
 
+/**
+ * 同時に鳴らす金属音を数える。鳴り終わる時刻 (音声の時計) を覚えておき、過ぎたものは空きとして扱う。
+ * タイマーを使わないので、タブが止まっていてもずれない。
+ */
+export function createVoiceLimiter(max: number) {
+  let ends: number[] = [];
+  return {
+    /** now に鳴らし始め endTime に鳴り終わる音を足せるか。足せたら true */
+    tryStart(now: number, endTime: number): boolean {
+      ends = ends.filter((t) => t > now);
+      if (ends.length >= max) return false;
+      ends.push(endTime);
+      return true;
+    },
+  };
+}
+
+/**
+ * すべての音はこの出口を通す。貫通で同じ瞬間に何枚も割れたときに音が割れないよう、コンプレッサーで抑える
+ * (素のままだと最悪ケースのピークが 0.9 を超えていた)。
+ */
+const masterCache = new WeakMap<BaseAudioContext, AudioNode>();
+
+function output(ac: BaseAudioContext): AudioNode {
+  let node = masterCache.get(ac);
+  if (!node) {
+    const comp = ac.createDynamicsCompressor();
+    // 既定の knee (30dB) だと単発の音まで潰れて小さくなるので、重なったときだけ効くよう狭くする
+    comp.threshold.value = -10;
+    comp.knee.value = 4;
+    comp.ratio.value = 8;
+    comp.connect(ac.destination);
+    node = comp;
+    masterCache.set(ac, node);
+  }
+  return node;
+}
+
 const noiseCache = new WeakMap<BaseAudioContext, AudioBuffer>();
 
 function noiseBuffer(ac: BaseAudioContext): AudioBuffer {
@@ -51,7 +89,7 @@ function noiseBurst(ac: BaseAudioContext, t: number, freq: number, q: number, du
   const gain = ac.createGain();
   gain.gain.setValueAtTime(volume, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(filter).connect(gain).connect(ac.destination);
+  src.connect(filter).connect(gain).connect(output(ac));
   src.start(t, Math.random() * 0.5);
   src.stop(t + dur);
 }
@@ -63,9 +101,17 @@ function sine(ac: BaseAudioContext, t: number, freq: number, volume: number, dec
   gain.gain.setValueAtTime(0.0001, t);
   gain.gain.exponentialRampToValueAtTime(volume, t + 0.002);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
-  osc.connect(gain).connect(ac.destination);
+  osc.connect(gain).connect(output(ac));
   osc.start(t);
   osc.stop(t + decay);
+}
+
+/** 割れる瞬間の打撃音と、ガラスのきらめき (金属の余韻なし) */
+function synthStrike(ac: BaseAudioContext, t: number): void {
+  noiseBurst(ac, t, 3800, 0.9, 0.05, 0.25);
+  for (let i = 0; i < 5; i++) {
+    sine(ac, t + 0.02 + Math.random() * 0.14, 3200 + Math.random() * 3500, 0.012, 0.06 + Math.random() * 0.06);
+  }
 }
 
 /**
@@ -74,10 +120,7 @@ function sine(ac: BaseAudioContext, t: number, freq: number, volume: number, dec
  */
 export function synthShatter(ac: BaseAudioContext, t: number, base = 820 * (0.94 + Math.random() * 0.12)): void {
   for (const p of METAL_BAR_PARTIALS) sine(ac, t, base * p.ratio, 0.07 * p.gain, p.decay);
-  noiseBurst(ac, t, 3800, 0.9, 0.05, 0.25);
-  for (let i = 0; i < 5; i++) {
-    sine(ac, t + 0.02 + Math.random() * 0.14, 3200 + Math.random() * 3500, 0.012, 0.06 + Math.random() * 0.06);
-  }
+  synthStrike(ac, t);
 }
 
 /** ひびが入る: 高く短い「ピキッ」 */
@@ -88,7 +131,7 @@ export function synthCrack(ac: BaseAudioContext, t: number): void {
 
 export function createAudio() {
   let ctx: AudioContext | null = null;
-  let ringing = 0;
+  const voices = createVoiceLimiter(MAX_RINGING);
 
   // ブラウザの自動再生制限のため、最初のユーザー操作で AudioContext を作る
   const unlock = () => {
@@ -98,11 +141,11 @@ export function createAudio() {
   window.addEventListener('keydown', unlock);
   window.addEventListener('pointerdown', unlock);
 
+  // 金属の余韻が上限まで鳴っているときは、打撃音だけ鳴らす (貫通で連続して割っても無音にならない)
   function shatter(ac: AudioContext) {
-    if (ringing >= MAX_RINGING) return;
-    ringing++;
-    synthShatter(ac, ac.currentTime);
-    setTimeout(() => ringing--, METAL_BAR_PARTIALS[0]!.decay * 1000);
+    const t = ac.currentTime;
+    if (voices.tryStart(t, t + METAL_BAR_PARTIALS[0]!.decay)) synthShatter(ac, t);
+    else synthStrike(ac, t);
   }
 
   return {
