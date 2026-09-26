@@ -18,6 +18,19 @@ export interface Ball {
   r: number;
 }
 
+export type PowerUpKind = 'wide' | 'multi' | 'pierce';
+
+/** 落ちてくるアイテム */
+export interface PowerUp extends Rect {
+  kind: PowerUpKind;
+}
+
+/** 効果の残り時間 (秒)。0 なら無効 */
+export interface Effects {
+  wide: number;
+  pierce: number;
+}
+
 export type Phase = 'ready' | 'playing' | 'paused' | 'levelClear' | 'gameOver' | 'won';
 
 export type GameEvent =
@@ -26,6 +39,7 @@ export type GameEvent =
   | 'paddle'
   | 'brickHit'
   | 'brickBreak'
+  | 'powerUp'
   | 'lifeLost'
   | 'levelClear'
   | 'gameOver'
@@ -48,12 +62,19 @@ export interface GameState {
   /** 0 始まりのステージ番号 */
   level: number;
   paddle: Rect;
-  ball: Ball;
+  /** マルチボールで増える。待機中は常に1個 */
+  balls: Ball[];
   bricks: Brick[];
+  powerUps: PowerUp[];
+  effects: Effects;
   /** 現在のボール速度 (px/s) */
   speed: number;
   /** 直前の update で起きた出来事 (効果音などに使う) */
   events: GameEvent[];
+  /** アイテムが落ちる確率 (テストで 0 や 1 にできる) */
+  dropChance: number;
+  /** 乱数の内部状態 */
+  seed: number;
 }
 
 export const NO_INPUT: Input = { left: false, right: false, pointerX: null, action: false, pause: false };

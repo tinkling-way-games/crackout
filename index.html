@@ -34,6 +34,19 @@
         cursor: none;
       }
       p { margin: 0; font-size: 13px; color: var(--muted); text-align: center; }
+      .item {
+        display: inline-block;
+        min-width: 26px;
+        padding: 0 6px;
+        margin-left: 8px;
+        border: 1.5px solid #fffd;
+        border-radius: 9px;
+        background: var(--c);
+        color: #fff;
+        font-weight: 800;
+        font-size: 11px;
+        line-height: 15px;
+      }
       kbd {
         font: inherit;
         padding: 1px 6px;
@@ -50,6 +63,12 @@
       ・発射 <kbd>Space</kbd> / クリック / タップ
       ・一時停止 <kbd>P</kbd> / <kbd>Esc</kbd>
       ・音 <kbd>M</kbd>
+    </p>
+    <p class="items">
+      アイテム:
+      <span class="item" style="--c:#c792ea">W</span> パドル拡大
+      <span class="item" style="--c:#ff79c6">M</span> マルチボール
+      <span class="item" style="--c:#ff5370">P</span> 貫通
     </p>
     <script type="module" src="./dist/main.js"></script>
   </body>

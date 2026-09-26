@@ -82,12 +82,39 @@ try {
   await page.mouse.move(box.x + box.width * 0.1, box.y + box.height * 0.5);
   await waitFor(() => window.__breakout.state.paddle.x < 100);
 
+  // パワーアップ: パドルに重なる位置に3種類のアイテムを置き、取れば効果が出ること。
+  // ボールを落とすと効果がリセットされて誤判定になるので、ボールを安全な位置に移す準備は
+  // 1回の evaluate でまとめて行い、取得したフレームの状態をページ内の rAF で記録する
+  await page.evaluate(() => {
+    const s = window.__breakout.state;
+    s.phase = 'playing';
+    Object.assign(s.balls[0], { x: 400, y: 260, vx: 60, vy: -s.speed });
+    const p = s.paddle;
+    // ブロックを壊した拍子に自然に落ちているアイテムがあると「全部取った」判定が遅れるので消しておく
+    s.powerUps = [];
+    for (const kind of ['wide', 'multi', 'pierce']) {
+      s.powerUps.push({ kind, x: p.x + p.w / 2 - 22, y: p.y - 8, w: 44, h: 18 });
+    }
+    window.__powerUpSnapshot = undefined;
+    const watch = () => {
+      const st = window.__breakout.state;
+      if (st.powerUps.length > 0) return requestAnimationFrame(watch);
+      window.__powerUpSnapshot = { phase: st.phase, wide: st.effects.wide, pierce: st.effects.pierce, balls: st.balls.length };
+    };
+    requestAnimationFrame(watch);
+  });
+  await waitFor(() => window.__powerUpSnapshot !== undefined);
+  const fx = await page.evaluate(() => window.__powerUpSnapshot);
+  if (!(fx.phase === 'playing' && fx.wide > 0 && fx.pierce > 0 && fx.balls === 3)) {
+    fail(`アイテムの効果が出ていない: ${JSON.stringify(fx)}`);
+  }
+
   await page.waitForTimeout(300);
   await page.locator('#game').screenshot({ path: 'test-results/playing.png' });
 
   if (errors.length) fail(`ブラウザでエラー: ${errors.join(' / ')}`);
   const end = await game();
-  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, bricks ${start.bricks} → ${end.bricks})`);
+  if (!process.exitCode) console.log(`✔ e2e OK (score ${end.score}, bricks ${start.bricks} → ${end.bricks}, powerUps ${JSON.stringify(fx)})`);
 } catch (e) {
   fail(e instanceof Error ? e.message : String(e));
   await page.screenshot({ path: 'test-results/failure.png' }).catch(() => {});

@@ -1,6 +1,6 @@
 import { HEIGHT, WIDTH } from './game/constants.ts';
 import { LEVELS } from './game/levels.ts';
-import type { Brick, GameState, Phase } from './game/types.ts';
+import type { Ball, Brick, GameState, Phase, PowerUp, PowerUpKind } from './game/types.ts';
 
 const COLORS = {
   bg: '#0e1530',
@@ -15,6 +15,13 @@ const COLORS = {
 
 /** 耐久値ごとの色 (1: 水色, 2: 緑, 3: 橙) */
 const BRICK_COLORS: Record<number, string> = { 1: '#4fc3f7', 2: '#7bd88f', 3: '#ffb454' };
+
+/** アイテムの見た目。色はブロック (水色・緑・橙) と被らないものにする */
+export const POWERUP_STYLES: Record<PowerUpKind, { label: string; color: string; name: string }> = {
+  wide: { label: 'W', color: '#c792ea', name: '拡大' },
+  multi: { label: 'M', color: '#ff79c6', name: 'マルチ' },
+  pierce: { label: 'P', color: '#ff5370', name: '貫通' },
+};
 
 const MESSAGES: Partial<Record<Phase, [title: string, sub: string]>> = {
   ready: ['', 'Space / クリック / タップ で発射'],
@@ -54,6 +61,45 @@ function drawBrick(ctx: CanvasRenderingContext2D, b: Brick) {
   ctx.fillRect(b.x + 4, b.y + 3, b.w - 8, 3);
 }
 
+function drawPowerUp(ctx: CanvasRenderingContext2D, item: PowerUp) {
+  const style = POWERUP_STYLES[item.kind];
+  ctx.fillStyle = style.color;
+  roundRect(ctx, item.x, item.y, item.w, item.h, item.h / 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 13px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(style.label, item.x + item.w / 2, item.y + item.h / 2 + 1);
+}
+
+function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, pierce: boolean) {
+  ctx.save();
+  if (pierce) {
+    // 貫通中は赤く光らせ、進行方向の後ろに残像を付ける
+    const len = Math.hypot(ball.vx, ball.vy) || 1;
+    for (let i = 3; i >= 1; i--) {
+      ctx.globalAlpha = 0.12 * (4 - i);
+      ctx.fillStyle = POWERUP_STYLES.pierce.color;
+      ctx.beginPath();
+      ctx.arc(ball.x - (ball.vx / len) * i * 7, ball.y - (ball.vy / len) * i * 7, ball.r * (1 - i * 0.12), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = POWERUP_STYLES.pierce.color;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = '#ffd0d8';
+  } else {
+    ctx.fillStyle = COLORS.ball;
+  }
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean): void {
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -63,14 +109,16 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
 
   for (const b of s.bricks) drawBrick(ctx, b);
 
-  ctx.fillStyle = COLORS.paddle;
+  for (const item of s.powerUps) drawPowerUp(ctx, item);
+
+  // 拡大中のパドルは色を変える。残り2秒を切ったら点滅して終わりを知らせる
+  const wide = s.effects.wide > 0;
+  const blink = wide && s.effects.wide < 2 && Math.floor(s.effects.wide * 8) % 2 === 0;
+  ctx.fillStyle = wide && !blink ? POWERUP_STYLES.wide.color : COLORS.paddle;
   roundRect(ctx, s.paddle.x, s.paddle.y, s.paddle.w, s.paddle.h, s.paddle.h / 2);
 
   if (s.phase !== 'gameOver') {
-    ctx.fillStyle = COLORS.ball;
-    ctx.beginPath();
-    ctx.arc(s.ball.x, s.ball.y, s.ball.r, 0, Math.PI * 2);
-    ctx.fill();
+    for (const ball of s.balls) drawBall(ctx, ball, s.effects.pierce > 0);
   }
 
   // HUD
@@ -79,6 +127,24 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText(`SCORE ${s.score}`, 20, 32);
+  // 有効な効果と残り時間
+  let ex = 20;
+  ctx.font = `700 14px ${FONT}`;
+  for (const kind of ['wide', 'pierce'] as const) {
+    const left = s.effects[kind];
+    if (left <= 0) continue;
+    const style = POWERUP_STYLES[kind];
+    const text = `${style.label} ${style.name} ${Math.ceil(left)}s`;
+    ctx.fillStyle = style.color;
+    ctx.fillText(text, ex, 56);
+    ex += ctx.measureText(text).width + 16;
+  }
+  if (s.balls.length > 1 && s.phase === 'playing') {
+    ctx.fillStyle = POWERUP_STYLES.multi.color;
+    ctx.fillText(`M ×${s.balls.length}`, ex, 56);
+  }
+  ctx.font = `600 18px ${FONT}`;
+  ctx.fillStyle = COLORS.hud;
   ctx.textAlign = 'center';
   ctx.fillText(`STAGE ${s.level + 1} / ${LEVELS.length}`, WIDTH / 2, 32);
   ctx.textAlign = 'right';

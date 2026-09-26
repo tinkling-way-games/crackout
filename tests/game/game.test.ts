@@ -12,39 +12,42 @@ const input = (patch: Partial<Input> = {}): Input => ({ ...NO_INPUT, ...patch })
 const ONE_BRICK = [['....1.....']];
 const TWO_STAGES = [['....1.....'], ['....1.....']];
 
-function launched(levels = LEVELS): GameState {
-  const s = createGame(levels);
+/** 既存の挙動を確かめるテストではアイテムを落とさない */
+const NO_DROP = { dropChance: 0, seed: 1 };
+
+function launched(levels = LEVELS, options = NO_DROP): GameState {
+  const s = createGame(levels, options);
   update(s, input({ action: true }), DT, levels);
   return s;
 }
 
 describe('開始と発射', () => {
   it('初期状態: 待機中・ライフ3・ボールはパドルの上', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     assert.equal(s.phase, 'ready');
     assert.equal(s.lives, INITIAL_LIVES);
     assert.equal(s.score, 0);
-    assert.equal(s.ball.x, s.paddle.x + s.paddle.w / 2);
-    assert.equal(s.ball.y, s.paddle.y - s.ball.r);
+    assert.equal(s.balls[0]!.x, s.paddle.x + s.paddle.w / 2);
+    assert.equal(s.balls[0]!.y, s.paddle.y - s.balls[0]!.r);
   });
 
   it('待機中はボールがパドルについてくる', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     update(s, input({ pointerX: 200 }), DT);
-    assert.equal(s.ball.x, 200);
+    assert.equal(s.balls[0]!.x, 200);
   });
 
   it('発射すると上向きに飛ぶ', () => {
     const s = launched();
     assert.equal(s.phase, 'playing');
-    assert.ok(s.ball.vy < 0);
+    assert.ok(s.balls[0]!.vy < 0);
     assert.ok(s.events.includes('launch'));
   });
 });
 
 describe('パドル操作', () => {
   it('キーボードで動き、画面端で止まる', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     const x0 = s.paddle.x;
     update(s, input({ right: true }), 0.1);
     assert.ok(s.paddle.x > x0);
@@ -55,7 +58,7 @@ describe('パドル操作', () => {
   });
 
   it('ポインタ位置にパドルの中心が合う', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     update(s, input({ pointerX: 300 }), DT);
     assert.equal(s.paddle.x + s.paddle.w / 2, 300);
   });
@@ -64,10 +67,10 @@ describe('パドル操作', () => {
 describe('反射とブロック', () => {
   it('天井で跳ね返る', () => {
     const s = launched(ONE_BRICK);
-    Object.assign(s.ball, { x: 100, y: 20, vx: 0, vy: -s.speed });
+    Object.assign(s.balls[0]!, { x: 100, y: 20, vx: 0, vy: -s.speed });
     for (let i = 0; i < 10; i++) update(s, NO_INPUT, DT, ONE_BRICK);
-    assert.ok(s.ball.vy > 0);
-    assert.ok(s.ball.y - s.ball.r >= 0);
+    assert.ok(s.balls[0]!.vy > 0);
+    assert.ok(s.balls[0]!.y - s.balls[0]!.r >= 0);
   });
 
   it('耐久2のブロックは1回目で欠け、2回目で壊れて得点が入る', () => {
@@ -75,14 +78,14 @@ describe('反射とブロック', () => {
     const s = launched(levels);
     const brick = s.bricks[0]!;
     const shoot = () => {
-      Object.assign(s.ball, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
+      Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
       s.events = [];
       for (let i = 0; i < 20 &&!s.events.some((e) => e.startsWith('brick')); i++) update(s, NO_INPUT, DT, levels);
     };
     shoot();
     assert.equal(brick.hp, 1);
     assert.equal(s.score, 10);
-    assert.ok(s.ball.vy > 0, 'ブロックで下向きに跳ね返る');
+    assert.ok(s.balls[0]!.vy > 0, 'ブロックで下向きに跳ね返る');
     shoot();
     assert.equal(s.bricks.length, 1, '壊れたブロックは消える');
     assert.equal(s.score, 10 + 10 + 80);
@@ -98,7 +101,7 @@ describe('反射とブロック', () => {
         // ブロック下辺の左端付近 (off = 0 が左下の角) を狙って撃つ
         const tx = brick.x + off;
         const ty = brick.y + brick.h;
-        Object.assign(s.ball, {
+        Object.assign(s.balls[0]!, {
           x: tx - Math.sin(a) * 60,
           y: ty + Math.cos(a) * 60,
           vx: Math.sin(a) * s.speed,
@@ -122,10 +125,10 @@ describe('反射とブロック', () => {
     const s = launched(levels);
     const [a, b] = s.bricks as [Brick, Brick];
     const seam = (a.x + a.w + b.x) / 2;
-    Object.assign(s.ball, { x: seam, y: a.y + a.h + 30, vx: 0, vy: -s.speed });
-    for (let i = 0; i < 30 && s.ball.vy < 0; i++) update(s, NO_INPUT, DT, levels);
+    Object.assign(s.balls[0]!, { x: seam, y: a.y + a.h + 30, vx: 0, vy: -s.speed });
+    for (let i = 0; i < 30 && s.balls[0]!.vy < 0; i++) update(s, NO_INPUT, DT, levels);
     assert.equal(s.bricks.length, 1);
-    assert.ok(s.ball.vy > 0);
+    assert.ok(s.balls[0]!.vy > 0);
     for (let i = 0; i < 10; i++) update(s, NO_INPUT, DT, levels);
     assert.equal(s.bricks.length, 1, '跳ね返った後にもう1個を削らない');
   });
@@ -134,7 +137,7 @@ describe('反射とブロック', () => {
     const s = launched(ONE_BRICK);
     const brick = s.bricks[0]!;
     s.speed = 720;
-    Object.assign(s.ball, { x: brick.x + brick.w / 2, y: brick.y + 200, vx: 0, vy: -720 });
+    Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + 200, vx: 0, vy: -720 });
     update(s, NO_INPUT, 0.25, ONE_BRICK);
     assert.notEqual(s.phase, 'playing', '当たって全消し → クリアになる');
   });
@@ -144,26 +147,26 @@ describe('パドル', () => {
   it('上から当たると打ち返す', () => {
     const s = launched(ONE_BRICK);
     const p = s.paddle;
-    Object.assign(s.ball, { x: p.x + p.w / 2, y: p.y - 30, vx: 0, vy: s.speed });
-    for (let i = 0; i < 20 && s.ball.vy > 0; i++) update(s, input({ pointerX: p.x + p.w / 2 }), DT, ONE_BRICK);
-    assert.ok(s.ball.vy < 0);
+    Object.assign(s.balls[0]!, { x: p.x + p.w / 2, y: p.y - 30, vx: 0, vy: s.speed });
+    for (let i = 0; i < 20 && s.balls[0]!.vy > 0; i++) update(s, input({ pointerX: p.x + p.w / 2 }), DT, ONE_BRICK);
+    assert.ok(s.balls[0]!.vy < 0);
     assert.ok(s.events.includes('paddle'));
   });
 
   it('上面より下に来たボールは、パドルを横から寄せても拾えない', () => {
     const s = launched(ONE_BRICK);
     const p = s.paddle;
-    Object.assign(s.ball, { x: 100, y: p.y + p.h / 2, vx: 0, vy: s.speed });
+    Object.assign(s.balls[0]!, { x: 100, y: p.y + p.h / 2, vx: 0, vy: s.speed });
     // パドルの右端がボールに重なる位置へ瞬間移動
     update(s, input({ pointerX: 100 - p.w / 2 + 2 }), DT, ONE_BRICK);
-    assert.ok(s.ball.vy > 0, '下向きのまま');
+    assert.ok(s.balls[0]!.vy > 0, '下向きのまま');
     assert.ok(!s.events.includes('paddle'));
   });
 });
 
 describe('ライフとゲームオーバー', () => {
   const drop = (s: GameState) => {
-    Object.assign(s.ball, { x: 10, y: HEIGHT - 5, vx: 0, vy: 400 });
+    Object.assign(s.balls[0]!, { x: 10, y: HEIGHT - 5, vx: 0, vy: 400 });
     s.paddle.x = WIDTH - s.paddle.w;
     for (let i = 0; i < 20 && s.phase === 'playing'; i++) update(s, NO_INPUT, DT, ONE_BRICK);
   };
@@ -192,7 +195,7 @@ describe('ライフとゲームオーバー', () => {
 describe('ステージ進行', () => {
   const clear = (s: GameState, levels: string[][]) => {
     const brick = s.bricks[0]!;
-    Object.assign(s.ball, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
+    Object.assign(s.balls[0]!, { x: brick.x + brick.w / 2, y: brick.y + brick.h + 20, vx: 0, vy: -s.speed });
     for (let i = 0; i < 30 && s.phase === 'playing'; i++) update(s, NO_INPUT, DT, levels);
   };
 
@@ -215,15 +218,15 @@ describe('一時停止', () => {
     const s = launched();
     update(s, input({ pause: true }), DT);
     assert.equal(s.phase, 'paused');
-    const { x, y } = s.ball;
+    const { x, y } = s.balls[0]!;
     for (let i = 0; i < 10; i++) update(s, NO_INPUT, DT);
-    assert.deepEqual({ x: s.ball.x, y: s.ball.y }, { x, y });
+    assert.deepEqual({ x: s.balls[0]!.x, y: s.balls[0]!.y }, { x, y });
     update(s, input({ pause: true }), DT);
     assert.equal(s.phase, 'playing');
   });
 
   it('プレイ中以外 (待機・クリア・ゲームオーバー) では一時停止しない', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     update(s, input({ pause: true }), DT);
     assert.equal(s.phase, 'ready');
     s.phase = 'levelClear';
@@ -237,15 +240,15 @@ describe('一時停止', () => {
 
 describe('通しプレイ', () => {
   it('ボールを追いかける自動操縦で全ステージをクリアでき、ボールは常に画面内にある', () => {
-    const s = createGame();
+    const s = createGame(LEVELS, NO_DROP);
     let t = 0;
     // パドルの当たり位置を少しずつずらして角度を変え、同じ軌道の往復を避ける
     while (s.phase !== 'won' && t < 60 * 30) {
-      const aim = s.ball.x + Math.sin(t * 0.7) * s.paddle.w * 0.35;
+      const aim = s.balls[0]!.x + Math.sin(t * 0.7) * s.paddle.w * 0.35;
       const act = s.phase === 'ready' || s.phase === 'levelClear';
       update(s, input({ pointerX: aim, action: act }), DT);
       assert.notEqual(s.phase, 'gameOver');
-      assert.ok(s.ball.x >= 0 && s.ball.x <= WIDTH && s.ball.y >= 0, `ボールが画面外: ${s.ball.x},${s.ball.y}`);
+      assert.ok(s.balls[0]!.x >= 0 && s.balls[0]!.x <= WIDTH && s.balls[0]!.y >= 0, `ボールが画面外: ${s.balls[0]!.x},${s.balls[0]!.y}`);
       t += DT;
     }
     assert.equal(s.phase, 'won', `30分以内にクリアできなかった (stage ${s.level + 1}, 残り ${s.bricks.length})`);

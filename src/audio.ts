@@ -7,6 +7,7 @@ const TONES: Partial<Record<GameEvent, { freq: number; dur: number; type: Oscill
   paddle: { freq: 440, dur: 0.05, type: 'square' },
   brickHit: { freq: 660, dur: 0.05, type: 'triangle' },
   brickBreak: { freq: 880, dur: 0.08, type: 'triangle' },
+  powerUp: { freq: 1175, dur: 0.18, type: 'sine' },
   lifeLost: { freq: 160, dur: 0.4, type: 'sawtooth' },
   levelClear: { freq: 990, dur: 0.3, type: 'triangle' },
   gameOver: { freq: 110, dur: 0.6, type: 'sawtooth' },

@@ -32,3 +32,18 @@ export const INITIAL_LIVES = 3;
 export const SCORE_PER_HIT = 10;
 /** ブロックを壊したときのボーナス (耐久値 × この値) */
 export const SCORE_BREAK_BONUS = 40;
+
+// パワーアップ
+/** ブロックを壊したときにアイテムが落ちる確率 */
+export const POWERUP_DROP_CHANCE = 0.18;
+export const POWERUP_FALL_SPEED = 160;
+export const POWERUP_WIDTH = 44;
+export const POWERUP_HEIGHT = 18;
+/** W: パドル拡大の倍率と持続時間 (秒) */
+export const WIDE_SCALE = 1.5;
+export const WIDE_DURATION = 15;
+/** P: 貫通の持続時間 (秒) */
+export const PIERCE_DURATION = 8;
+/** M: 分裂したボールを元の向きから何度ずらすか */
+export const MULTI_SPREAD = (20 * Math.PI) / 180;
+export const MAX_BALLS = 12;
