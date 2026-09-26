@@ -1,0 +1,8 @@
+# Claude Code: 個人用のローカル設定はコミットしない
+.claude/settings.local.json
+CLAUDE.local.md
+
+# 秘密情報
+.env
+.env.*
+!.env.example

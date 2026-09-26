@@ -1,0 +1,15 @@
+# 人間・Claude・CI が同じ検証 (scripts/verify.sh) を使う。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: スタックに合わせてセットアップを追加 (actions/setup-node, astral-sh/setup-uv など)
+      - run: scripts/verify.sh

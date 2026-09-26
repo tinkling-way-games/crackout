@@ -1,0 +1,129 @@
+---
+title: Claude Code 自走開発環境テンプレート
+tags:
+  - claude-code
+  - autonomous-dev
+---
+
+# Claude Code 自走開発環境テンプレート
+
+Claude Code に「タスクを渡したら、計画・実装・検証・記録・PR まで自分で回す」状態を作るための、言語非依存のテンプレート。
+
+> [!summary] 考え方
+> 自走の質は、モデルの賢さより **「完了の定義」と「検証の自動化」** で決まる。
+> このテンプレートは、Claude が *何をすべきか* (CLAUDE.md / スキル)、*終わったと判断してよいか* (verify.sh + Stop hook)、*やってはいけないこと* (permissions + guard hook) の3つを仕組みで固定する。
+
+## 構成
+
+```
+.
+├── CLAUDE.md                     # 毎セッション読まれる基本ルール (短く保つ)
+├── .claude/
+│   ├── settings.json             # 権限 (allow/ask/deny) と hooks の登録
+│   ├── hooks/
+│   │   ├── session-start.sh      # 依存インストール + PROGRESS.md をコンテキストに注入
+│   │   ├── guard-bash.sh         # 危険コマンドのブロック
+│   │   ├── post-edit-format.sh   # 編集後の自動フォーマット
+│   │   └── stop-verify.sh        # 検証が通るまで「完了」させない
+│   ├── skills/
+│   │   ├── autopilot/SKILL.md    # 自走の手順 (/autopilot)
+│   │   └── steward/SKILL.md      # PR を緑にするときの運用ルール
+│   └── agents/
+│       ├── planner.md            # タスク分解
+│       └── reviewer.md           # セルフレビュー
+├── scripts/verify.sh             # lint/型/テストの単一入口 (人間・Claude・CI 共通)
+├── docs/
+│   ├── TASKS.md                  # バックログ (Inbox → Ready → Doing → Done)
+│   └── PROGRESS.md               # セッションをまたぐ作業記憶
+└── .github/
+    ├── workflows/claude.yml      # Issue/PR で @claude と呼ぶと動く
+    ├── workflows/ci.yml          # verify.sh を CI でも実行
+    └── ISSUE_TEMPLATE/task.md    # 受け入れ条件つきタスクのひな形
+```
+
+## 使い方 (最短)
+
+1. このリポジトリの中身を自分のプロジェクトにコピーする
+2. `CLAUDE.md` の TODO (概要・コマンド) を埋める
+3. `scripts/verify.sh` が自分のプロジェクトのテストを回すことを確認する
+4. `docs/TASKS.md` の `## Ready` にタスクを書く
+5. `claude` を起動して `/autopilot` と打つ
+
+GitHub から回したい場合は、`claude` 内で `/install-github-app` を実行し、Issue テンプレート「タスク (Claude に任せる)」で Issue を立てる。
+
+---
+
+## 仕組みの詳細
+
+### 1. 自走ループ
+
+```mermaid
+flowchart LR
+    A[タスク<br/>TASKS.md / Issue] --> B[受け入れ条件を固める]
+    B --> C[計画<br/>planner]
+    C --> D[テスト→実装]
+    D --> E{verify.sh}
+    E -- 失敗 --> D
+    E -- 成功 --> F[セルフレビュー<br/>reviewer]
+    F --> G[PROGRESS.md に記録]
+    G --> H[commit / PR]
+```
+
+手順そのものは `autopilot` スキルに書いてあり、CLAUDE.md には要約だけを置いている。CLAUDE.md は毎回全文がコンテキストに載るため、長い手順はスキルに逃がしてコンテキストを節約する。
+
+### 2. hooks が担うこと
+
+| hook | タイミング | 役割 |
+| --- | --- | --- |
+| `session-start.sh` | セッション開始 | クラウド環境なら依存を入れる。ブランチ・未コミット件数・`PROGRESS.md` 末尾を Claude に渡す |
+| `guard-bash.sh` | Bash 実行前 | ルート削除、main への push、force push、`.env` 読み出し、`curl \| sh` を exit 2 で止める |
+| `post-edit-format.sh` | Edit/Write 後 | prettier / ruff / gofmt / rustfmt があれば整形 |
+| `stop-verify.sh` | 応答を終える直前 | 変更があれば `verify.sh` を実行し、失敗なら exit 2 で差し戻す |
+
+> [!important] Stop hook が自走の要
+> 「テスト通りました」と言いながら実は通っていない、という事故を仕組みで防ぐ。
+> 失敗すると stderr の内容が Claude に返され、Claude は修正を続ける。
+> 無限ループを避けるため、`stop_hook_active` が true のとき (差し戻し後の2回目) は通す。
+> 一時的に切りたいときは `CLAUDE_VERIFY_ON_STOP=0 claude` で起動する。
+
+### 3. 権限設計
+
+`settings.json` の `permissions` は3段階で分けている。
+
+- **allow**: 読み取り系 git、テスト・lint 実行 → 確認なしで実行 (自走を止めない)
+- **ask**: `git push`、パッケージ追加 → 人間が確認 (外に出る/環境を変える操作)
+- **deny**: `.env` の読み取り、force push、`reset --hard`、`sudo` → 常に拒否
+
+> [!tip] 慣れてきたら
+> `git push` を allow に移すと、PR 作成まで完全に無人で回る。
+> 逆に不安なうちは `claude --permission-mode plan` で計画だけ出させ、承認してから実行させるとよい。
+
+### 4. 記憶の持たせ方
+
+Claude はセッションをまたいで記憶を持たないので、ファイルに外部化する。
+
+- `docs/TASKS.md`: 何をやるか (状態つき)
+- `docs/PROGRESS.md`: 何をやったか・なぜそう判断したか・次は何か
+- git 履歴: 何を変えたか
+
+SessionStart hook が `PROGRESS.md` の末尾を毎回読み込むので、新しいセッションでも「前回の続き」から始められる。
+
+### 5. 自走を拡張する方向
+
+> [!example]- 定期実行 (放置で進める)
+> Claude Code on the web の Routines (スケジュール実行) で「毎朝 `docs/TASKS.md` の Ready を1件 `/autopilot` で進めて PR を作る」ように設定すると、寝ている間にも PR が溜まる。
+> ローカルなら `claude -p "/autopilot" --permission-mode acceptEdits` を cron から呼ぶ形でも同じことができる。
+
+> [!example]- 並列化
+> タスクごとに git worktree (`claude --worktree` や `EnterWorktree`) を切ると、複数の Claude を衝突させずに同時に走らせられる。
+> クラウドなら1タスク1セッションで並べるのが簡単。
+
+> [!example]- PR の見張り
+> クラウドセッションで PR を作ったあと「この PR を見張って」と頼むと、CI 失敗やレビューコメントに反応して修正を push し続ける。その際の運用ルールは `steward` スキルが読まれる。
+
+## カスタマイズの優先順位
+
+1. **`scripts/verify.sh`** — ここが弱いと、Stop hook も CI も意味をなさない。まず最初に固める
+2. **`CLAUDE.md`** — プロジェクト固有の「毎回守ること」だけを足す。長くしない
+3. **Issue の受け入れ条件** — 自走の成果物の質は、ほぼここで決まる
+4. **権限** — 慣れに応じて allow を広げる
