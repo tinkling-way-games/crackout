@@ -153,6 +153,20 @@ describe('パドル', () => {
     assert.ok(s.events.includes('paddle'));
   });
 
+  it('端では曲面に沿って低い位置で打ち返す (空中で跳ね返らない)', () => {
+    const s = launched(ONE_BRICK);
+    const p = s.paddle;
+    const edgeX = p.x + 4;
+    Object.assign(s.balls[0]!, { x: edgeX, y: p.y - 40, vx: 0, vy: s.speed });
+    let lowest = 0;
+    for (let i = 0; i < 40 && s.balls[0]!.vy > 0; i++) {
+      update(s, input({ pointerX: p.x + p.w / 2 }), DT, ONE_BRICK);
+      lowest = Math.max(lowest, s.balls[0]!.y);
+    }
+    assert.ok(s.balls[0]!.vy < 0, '打ち返している');
+    assert.ok(lowest > p.y - s.balls[0]!.r + 10, `平らな上面 (${p.y - s.balls[0]!.r}) より下まで来てから跳ね返る: ${lowest}`);
+  });
+
   it('上面より下に来たボールは、パドルを横から寄せても拾えない', () => {
     const s = launched(ONE_BRICK);
     const p = s.paddle;

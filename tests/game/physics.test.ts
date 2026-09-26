@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { MAX_BOUNCE_ANGLE } from '../../src/game/constants.ts';
-import { circleRectHit, paddleBounce, reflect, setSpeed } from '../../src/game/physics.ts';
+import { circleRectHit, paddleBounce, paddleSurfaceY, reflect, setSpeed } from '../../src/game/physics.ts';
 import type { Ball, Rect } from '../../src/game/types.ts';
 
 const rect: Rect = { x: 100, y: 100, w: 80, h: 20 };
@@ -105,5 +105,48 @@ describe('setSpeed', () => {
     const b = ball(0, 0, 3, 4);
     setSpeed(b, 10);
     assert.ok(close(b.vx, 6) && close(b.vy, 8));
+  });
+});
+
+describe('paddleSurfaceY (パドル上面の曲面)', () => {
+  const paddle: Rect = { x: 300, y: 500, w: 110, h: 14 };
+  // 端で出る角度が MAX_BOUNCE_ANGLE (60°) なら、真上から落ちたボールでそうなる面の傾きは半分の 30°
+  const tilt = MAX_BOUNCE_ANGLE / 2;
+
+  it('中央が一番高く (= paddle.y)、左右対称に下がる', () => {
+    assert.equal(paddleSurfaceY(paddle, 355), 500);
+    assert.ok(close(paddleSurfaceY(paddle, 330), paddleSurfaceY(paddle, 380)));
+    assert.ok(paddleSurfaceY(paddle, 330) > 500);
+  });
+
+  it('端の下がり幅は、傾き30°の円弧の盛り上がり (幅 × (1 − cos30°))', () => {
+    const sag = paddle.w * (1 - Math.cos(tilt));
+    assert.ok(close(paddleSurfaceY(paddle, 300), 500 + sag));
+    assert.ok(Math.abs(sag - 14.74) < 0.01, `110px のパドルで約15px: ${sag}`);
+  });
+
+  it('端より外は端の高さのまま', () => {
+    assert.equal(paddleSurfaceY(paddle, 250), paddleSurfaceY(paddle, 300));
+  });
+
+  it('円弧の傾きから計算した反射角と、実際の打ち返し角がほぼ一致する (差 1.5° 未満)', () => {
+    // 端ちょうどは外側が平らなので数値微分が崩れる。すぐ内側 (±0.99) までを調べる
+    const offsets = [-0.99, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 0.99];
+    for (const offset of offsets) {
+      const x = 355 + offset * 55;
+      const h = 1e-4;
+      const slope = (paddleSurfaceY(paddle, x + h) - paddleSurfaceY(paddle, x - h)) / (2 * h);
+      const mirror = 2 * Math.atan(slope); // 真上から落ちたボールが曲面で跳ね返る角度
+      const b = ball(x, 480, 0, 300);
+      paddleBounce(b, paddle, 300);
+      const actual = Math.atan2(b.vx, -b.vy);
+      assert.ok(Math.abs(mirror - actual) < (1.5 * Math.PI) / 180, `offset=${offset.toFixed(1)}: ${mirror} vs ${actual}`);
+    }
+  });
+
+  it('打ち返したボールは、その位置の曲面にちょうど接する高さに置かれる', () => {
+    const b = ball(305, 510, 0, 300);
+    paddleBounce(b, paddle, 300);
+    assert.ok(close(b.y, paddleSurfaceY(paddle, 305) - b.r));
   });
 });

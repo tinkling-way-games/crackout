@@ -25,7 +25,7 @@ import {
   WIDTH,
 } from './constants.ts';
 import { LEVELS, parseLevel } from './levels.ts';
-import { circleRectHit, paddleBounce, reflect, setSpeed } from './physics.ts';
+import { circleRectHit, paddleBounce, reflect, setSpeed, touchesPaddle } from './physics.ts';
 import { nextRandom } from './random.ts';
 import type { Ball, Brick, GameState, Input, PowerUpKind, Rect } from './types.ts';
 
@@ -284,8 +284,8 @@ function stepBalls(state: GameState, dt: number, levels: Levels): void {
         state.events.push('wall');
       }
 
-      // パドル (上から落ちてきたときだけ。側面や下をかすめたボールは拾わず落とす)
-      if (ball.vy > 0 && ball.y <= paddle.y && circleRectHit(ball, paddle)) {
+      // パドル (上から曲面に落ちてきたときだけ。側面や下をかすめたボールは拾わず落とす)
+      if (touchesPaddle(ball, paddle)) {
         paddleBounce(ball, paddle, state.speed);
         state.events.push('paddle');
       }

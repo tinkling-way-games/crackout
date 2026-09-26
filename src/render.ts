@@ -1,6 +1,6 @@
-import { HEIGHT, WIDTH } from './game/constants.ts';
+import { HEIGHT, MAX_BOUNCE_ANGLE, WIDTH } from './game/constants.ts';
 import { LEVELS } from './game/levels.ts';
-import type { Ball, Brick, GameState, Phase, PowerUp, PowerUpKind } from './game/types.ts';
+import type { Ball, Brick, GameState, Phase, PowerUp, PowerUpKind, Rect } from './game/types.ts';
 
 const COLORS = {
   bg: '#0e1530',
@@ -61,6 +61,32 @@ function drawBrick(ctx: CanvasRenderingContext2D, b: Brick) {
   ctx.fillRect(b.x + 4, b.y + 3, b.w - 8, 3);
 }
 
+/**
+ * パドルをドーム形に描く。上面は物理と同じ円弧 (physics.ts の paddleSurfaceY) で、
+ * 端で MAX_BOUNCE_ANGLE / 2 だけ傾く。下面は平ら。
+ */
+function drawPaddle(ctx: CanvasRenderingContext2D, p: Rect) {
+  const tilt = MAX_BOUNCE_ANGLE / 2;
+  const radius = p.w / 2 / Math.sin(tilt);
+  const cx = p.x + p.w / 2;
+  const edgeY = p.y + radius * (1 - Math.cos(tilt));
+  const bottom = edgeY + 6;
+  ctx.beginPath();
+  ctx.arc(cx, p.y + radius, radius, -Math.PI / 2 - tilt, -Math.PI / 2 + tilt);
+  ctx.arcTo(p.x + p.w, bottom, cx, bottom, 3);
+  ctx.arcTo(p.x, bottom, p.x, edgeY, 3);
+  ctx.closePath();
+  ctx.fill();
+  // 上面のハイライトで曲面らしさを出す
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, p.y + radius + 2, radius, -Math.PI / 2 - tilt * 0.8, -Math.PI / 2 + tilt * 0.8);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawPowerUp(ctx: CanvasRenderingContext2D, item: PowerUp) {
   const style = POWERUP_STYLES[item.kind];
   ctx.fillStyle = style.color;
@@ -115,7 +141,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState, muted: boolean
   const wide = s.effects.wide > 0;
   const blink = wide && s.effects.wide < 2 && Math.floor(s.effects.wide * 8) % 2 === 0;
   ctx.fillStyle = wide && !blink ? POWERUP_STYLES.wide.color : COLORS.paddle;
-  roundRect(ctx, s.paddle.x, s.paddle.y, s.paddle.w, s.paddle.h, s.paddle.h / 2);
+  drawPaddle(ctx, s.paddle);
 
   if (s.phase !== 'gameOver') {
     for (const ball of s.balls) drawBall(ctx, ball, s.effects.pierce > 0);

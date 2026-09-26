@@ -74,15 +74,42 @@ export function reflect(ball: Ball, hit: Hit): boolean {
 }
 
 /**
+ * パドル上面の高さ (曲面)。
+ * 打ち返す角度は「当たった位置 × MAX_BOUNCE_ANGLE」なので、真上から落ちたボールで同じ角度になる
+ * 鏡面は、端で MAX_BOUNCE_ANGLE / 2 だけ傾いた円弧になる (反射角は面の傾きの2倍)。
+ * その円弧の半径は「幅の半分 / sin(傾き)」。中央が paddle.y で、端に向かって下がる。
+ */
+export function paddleSurfaceY(paddle: Rect, x: number): number {
+  const half = paddle.w / 2;
+  const radius = half / Math.sin(MAX_BOUNCE_ANGLE / 2);
+  const dx = clamp(x - (paddle.x + half), -half, half);
+  return paddle.y + radius - Math.sqrt(radius * radius - dx * dx);
+}
+
+/**
  * パドルで打ち返す。当たった位置が中央から離れるほど角度が付く。
- * 中央 → 真上、端 → MAX_BOUNCE_ANGLE。
+ * 中央 → 真上、端 → MAX_BOUNCE_ANGLE。入射角は使わない (狙いやすさのため。曲面の鏡とは斜め入射で異なる)。
+ * ボールは曲面にちょうど接する高さへ戻す。
  */
 export function paddleBounce(ball: Ball, paddle: Rect, speed: number): void {
   const offset = clamp((ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1);
   const angle = offset * MAX_BOUNCE_ANGLE;
   ball.vx = speed * Math.sin(angle);
   ball.vy = -speed * Math.cos(angle);
-  ball.y = paddle.y - ball.r;
+  ball.y = paddleSurfaceY(paddle, ball.x) - ball.r;
+}
+
+/**
+ * 落ちてきたボールがパドルの曲面に触れたか。
+ * 曲面の傾きは最大30°なので、接触は「ボールの下端が真下の曲面に届いたか」で近似する
+ * (斜め方向の最短距離との差は最大でも 1px 程度)。
+ * ボールの中心が曲面より下に来ていたら、側面をかすめたものとして拾わない。
+ */
+export function touchesPaddle(ball: Ball, paddle: Rect): boolean {
+  if (ball.vy <= 0) return false;
+  if (ball.x + ball.r < paddle.x || ball.x - ball.r > paddle.x + paddle.w) return false;
+  const surface = paddleSurfaceY(paddle, ball.x);
+  return ball.y + ball.r >= surface && ball.y <= surface;
 }
 
 /** 向きを保ったまま速さだけ変える */
