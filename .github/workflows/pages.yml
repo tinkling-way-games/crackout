@@ -1,0 +1,55 @@
+# main に入った内容を GitHub Pages に公開する。
+# 事前準備 (リポジトリの設定):
+#   Settings → Pages → Build and deployment → Source を「GitHub Actions」にする
+# 公開先: https://<ユーザー名>.github.io/<リポジトリ名>/
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Actions タブから手動でも実行できる
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は1つずつ。実行中のデプロイは途中で止めない
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      # E2E は PR の CI (ci.yml) で確認済みなので、ここでは型・ユニットテスト・ビルドだけ
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # 公開に必要なファイルだけを集める (ソースやテストは出さない)
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r dist _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

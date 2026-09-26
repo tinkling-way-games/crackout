@@ -20,7 +20,8 @@ has_script() { [ -f package.json ] && jq -e --arg s "$1" '.scripts[$s]' package.
 # Node.js
 if [ -f package.json ]; then
   pm=npm; [ -f pnpm-lock.yaml ] && pm=pnpm
-  for s in lint typecheck test; do
+  # 定義されているものだけ、この順で実行する (e2e はビルド成果物を使うので build の後)
+  for s in lint typecheck test build test:e2e; do
     has_script "$s" && run $pm run "$s"
   done
 fi
@@ -28,7 +29,7 @@ fi
 # Python
 if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
   command -v ruff >/dev/null 2>&1 && run ruff check .
-  if command -v pytest >/dev/null 2>&1 && ls tests test 2>/dev/null | grep -q .; then
+  if command -v pytest >/dev/null 2>&1 && { [ -d tests ] || [ -d test ]; }; then
     run pytest -q
   fi
 fi
