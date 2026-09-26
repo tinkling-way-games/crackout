@@ -19,3 +19,12 @@ describe('createVoiceLimiter (同時に鳴らす金属音の上限)', () => {
     assert.equal(voices.tryStart(1.45, 2.85), true, '1つ目が鳴り終わったので空いた');
   });
 });
+
+describe('音の出口', () => {
+  it('スピーカー (destination) に直接つなぐのはコンプレッサーだけ (すべての音がピークを抑えられる)', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(new URL('../../src/audio.ts', import.meta.url), 'utf8');
+    const direct = src.split('\n').filter((line) => /\.connect\([^)]*\.destination\)/.test(line));
+    assert.deepEqual(direct.map((l) => l.trim()), ['comp.connect(ac.destination);']);
+  });
+});

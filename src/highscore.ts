@@ -21,11 +21,13 @@ export const MAX_ENTRIES = 5;
  * @returns rank 今回の順位 (0 = 1位)。圏外や0点なら null
  */
 export function insertScore(list: readonly ScoreEntry[], entry: ScoreEntry): { list: ScoreEntry[]; rank: number | null } {
-  if (entry.score <= 0) return { list: [...list], rank: null };
-  let at = list.findIndex((e) => e.score < entry.score);
-  if (at === -1) at = list.length;
-  if (at >= MAX_ENTRIES) return { list: [...list], rank: null };
-  const next = [...list.slice(0, at), entry, ...list.slice(at)].slice(0, MAX_ENTRIES);
+  // 渡されたものが上限を超えていても、返すのは常に上限件数まで
+  const top = list.slice(0, MAX_ENTRIES);
+  if (entry.score <= 0) return { list: top, rank: null };
+  let at = top.findIndex((e) => e.score < entry.score);
+  if (at === -1) at = top.length;
+  if (at >= MAX_ENTRIES) return { list: top, rank: null };
+  const next = [...top.slice(0, at), entry, ...top.slice(at)].slice(0, MAX_ENTRIES);
   return { list: next, rank: at };
 }
 
@@ -36,7 +38,10 @@ const isEntry = (v: unknown): v is ScoreEntry => {
     typeof e.score === 'number' &&
     Number.isFinite(e.score) &&
     e.score > 0 &&
+    // 到達ステージは 1 始まりの整数 (NaN・無限大・0・負数・小数は壊れたデータとして捨てる)
     typeof e.stage === 'number' &&
+    Number.isInteger(e.stage) &&
+    e.stage >= 1 &&
     typeof e.date === 'string'
   );
 };

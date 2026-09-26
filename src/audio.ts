@@ -129,6 +129,19 @@ export function synthCrack(ac: BaseAudioContext, t: number): void {
   sine(ac, t, 2400 + Math.random() * 600, 0.03, 0.05);
 }
 
+/** 壁・パドルなどの単発音。他の音と同じくコンプレッサーを通す */
+function synthTone(ac: BaseAudioContext, t: number, tone: { freq: number; dur: number; type: OscillatorType }): void {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = tone.type;
+  osc.frequency.setValueAtTime(tone.freq, t);
+  gain.gain.setValueAtTime(0.08, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + tone.dur);
+  osc.connect(gain).connect(output(ac));
+  osc.start(t);
+  osc.stop(t + tone.dur);
+}
+
 export function createAudio() {
   let ctx: AudioContext | null = null;
   const voices = createVoiceLimiter(MAX_RINGING);
@@ -162,17 +175,7 @@ export function createAudio() {
           continue;
         }
         const tone = TONES[event];
-        if (!tone) continue;
-        const t = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = tone.type;
-        osc.frequency.setValueAtTime(tone.freq, t);
-        gain.gain.setValueAtTime(0.08, t);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + tone.dur);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + tone.dur);
+        if (tone) synthTone(ctx, ctx.currentTime, tone);
       }
     },
   };

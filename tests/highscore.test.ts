@@ -43,6 +43,13 @@ describe('insertScore (ランキングへの記録)', () => {
     assert.equal(rank, null);
   });
 
+  it(`渡されたランキングが ${MAX_ENTRIES} 件を超えていても、返すのは上限件数まで (圏外・0点でも)`, () => {
+    const long = [900, 800, 700, 600, 500, 400, 300].map((s) => entry(s));
+    assert.equal(insertScore(long, entry(100)).list.length, MAX_ENTRIES);
+    assert.equal(insertScore(long, entry(0)).list.length, MAX_ENTRIES);
+    assert.equal(insertScore(long, entry(950)).list.length, MAX_ENTRIES);
+  });
+
   it('元の配列は書き換えない', () => {
     const before = [entry(500)];
     insertScore(before, entry(900));
@@ -66,6 +73,12 @@ describe('loadScores / saveScores (保存)', () => {
     assert.deepEqual(loadScores(memoryStorage({ [HIGH_SCORE_KEY]: '{"a":1}' })), []);
     const mixed = JSON.stringify([entry(500), { score: 'x' }, null, entry(-5), entry(300), { score: 200 }]);
     assert.deepEqual(loadScores(memoryStorage({ [HIGH_SCORE_KEY]: mixed })), [entry(500), entry(300)]);
+  });
+
+  it('ステージが 1 以上の整数でない記録は捨てる (NaN・無限大・0・負数・小数)', () => {
+    // JSON では NaN / Infinity は null になるので、文字列を直接組み立てる
+    const raw = `[${JSON.stringify(entry(500, 2))},{"score":400,"stage":0,"date":"d"},{"score":300,"stage":-1,"date":"d"},{"score":200,"stage":1.5,"date":"d"},{"score":150,"stage":null,"date":"d"},{"score":120,"stage":1e999,"date":"d"}]`;
+    assert.deepEqual(loadScores(memoryStorage({ [HIGH_SCORE_KEY]: raw })), [entry(500, 2)]);
   });
 
   it('保存されたデータの並びが崩れていても、高い順・上限件数にそろえる', () => {
