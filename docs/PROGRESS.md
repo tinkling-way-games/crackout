@@ -152,5 +152,6 @@
   4. Actions タブ → 「Deploy to GitHub Pages」を手動実行 (workflow_dispatch) し、新 URL で動くことを確認
   5. Actions の Secrets (`CLAUDE_CODE_OAUTH_TOKEN`) が移管後も残っているか確認。消えていれば `claude.yml` (@claude メンション) が動かないので再登録
   6. 知り合いに配った旧 URL は差し替えが必要 (リダイレクトされない)
-- 次にやること: 上記 1〜4 が済んだら、公開 URL でゲームが動くことを確認して本ログに記録
+- 完了 (2026-09-27 02:00 JST): ユーザーが crackout を **public** に変更 (Org を Team にする代わりに)、Pages の Source を GitHub Actions に設定し、「Deploy to GitHub Pages」を手動実行して成功。新 URL https://tinkling-way-games.github.io/crackout/ をブラウザで開き、タイトル・HUD・ブロック配置が表示され、`dist/` 配下のスクリプトが全て 200 で読み込まれることを確認。上記 5 (Secrets) と 6 (旧 URL の差し替え) はユーザー側で引き続き
+- 判断と理由: public 化を選んだのは、知り合いに配るゲームで隠す理由がなく、Org の有料化を避けられるため。public になったので `.github/workflows/` の内容も外から見えるが、Secrets の値は露出しない
 
