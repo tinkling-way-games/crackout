@@ -2,11 +2,12 @@ import { MAX_BOUNCE_ANGLE } from './constants.ts';
 import type { Ball, Rect } from './types.ts';
 
 export interface Hit {
-  /** 押し戻す向き (軸にそろえた単位ベクトル) */
+  /** 反射させる軸の向き (各成分は -1 / 0 / 1。角に正面から当たったときだけ両方が非0) */
   nx: number;
   ny: number;
-  /** めり込み量 */
-  depth: number;
+  /** めり込みを解消する押し戻し量 */
+  px: number;
+  py: number;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -14,6 +15,8 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /**
  * 円 (ボール) と矩形の当たり判定。
  * 法線は x 軸か y 軸にそろえる。斜めに反射させると角に当たったとき極端に水平な軌道になりやすいため。
+ * 角に当たったときは、ボールが「向かってきている」軸を選ぶ (離れつつある軸で反射させると、
+ * 反転せずにめり込んだまま次のステップでも当たり続けてしまう)。
  */
 export function circleRectHit(ball: Ball, rect: Rect): Hit | null {
   const cx = clamp(ball.x, rect.x, rect.x + rect.w);
@@ -30,24 +33,44 @@ export function circleRectHit(ball: Ball, rect: Rect): Hit | null {
     const top = ball.y - rect.y;
     const bottom = rect.y + rect.h - ball.y;
     const min = Math.min(left, right, top, bottom);
-    if (min === top) return { nx: 0, ny: -1, depth: top + ball.r };
-    if (min === bottom) return { nx: 0, ny: 1, depth: bottom + ball.r };
-    if (min === left) return { nx: -1, ny: 0, depth: left + ball.r };
-    return { nx: 1, ny: 0, depth: right + ball.r };
+    if (min === top) return { nx: 0, ny: -1, px: 0, py: -(top + ball.r) };
+    if (min === bottom) return { nx: 0, ny: 1, px: 0, py: bottom + ball.r };
+    if (min === left) return { nx: -1, ny: 0, px: -(left + ball.r), py: 0 };
+    return { nx: 1, ny: 0, px: right + ball.r, py: 0 };
   }
 
   const d = Math.sqrt(d2);
-  const depth = ball.r - d;
-  if (Math.abs(dx) > Math.abs(dy)) return { nx: Math.sign(dx), ny: 0, depth };
-  return { nx: 0, ny: Math.sign(dy), depth };
+  // 浮動小数点の誤差で「押し戻したのにまだ接触」とならないよう、ごくわずかに余分に押す
+  const depth = ball.r - d + 1e-6;
+  // 押し戻しは実際の方向へ (角でも接触が確実に解消される)
+  const px = (dx / d) * depth;
+  const py = (dy / d) * depth;
+
+  const approachX = dx !== 0 && ball.vx * dx < 0;
+  const approachY = dy !== 0 && ball.vy * dy < 0;
+  // 角に両方向から向かってきた: 両軸とも反転して来た方向へ返す (片方だけだと同じ角にもう一度当たる)
+  if (approachX && approachY) return { nx: Math.sign(dx), ny: Math.sign(dy), px, py };
+  const useX = approachX || (!approachY && Math.abs(dx) > Math.abs(dy));
+  return useX ? { nx: Math.sign(dx), ny: 0, px, py } : { nx: 0, ny: Math.sign(dy), px, py };
 }
 
-/** 当たった面に向かって進んでいるときだけ速度を反転する (二重反転の防止) */
-export function reflect(ball: Ball, hit: Hit): void {
-  ball.x += hit.nx * hit.depth;
-  ball.y += hit.ny * hit.depth;
-  if (hit.nx !== 0 && ball.vx * hit.nx < 0) ball.vx = -ball.vx;
-  if (hit.ny !== 0 && ball.vy * hit.ny < 0) ball.vy = -ball.vy;
+/**
+ * めり込みを戻し、当たった面に向かって進んでいれば速度を反転する。
+ * @returns 反転したら true。離れつつある (= すでに反射済み) なら false
+ */
+export function reflect(ball: Ball, hit: Hit): boolean {
+  ball.x += hit.px;
+  ball.y += hit.py;
+  let flipped = false;
+  if (hit.nx !== 0 && ball.vx * hit.nx < 0) {
+    ball.vx = -ball.vx;
+    flipped = true;
+  }
+  if (hit.ny !== 0 && ball.vy * hit.ny < 0) {
+    ball.vy = -ball.vy;
+    flipped = true;
+  }
+  return flipped;
 }
 
 /**

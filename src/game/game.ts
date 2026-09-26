@@ -102,18 +102,19 @@ function stepBall(state: GameState, dt: number, levels: Levels): void {
       state.events.push('wall');
     }
 
-    // パドル (落ちてくるときだけ)
-    if (ball.vy > 0 && circleRectHit(ball, paddle)) {
+    // パドル (上から落ちてきたときだけ。側面や下をかすめたボールは拾わず落とす)
+    if (ball.vy > 0 && ball.y <= paddle.y && circleRectHit(ball, paddle)) {
       paddleBounce(ball, paddle, state.speed);
       state.events.push('paddle');
     }
 
-    // ブロック (1ステップで当たるのは1個まで)
+    // ブロック (1ステップでダメージを与えるのは1個まで)
     for (let b = 0; b < state.bricks.length; b++) {
       const brick = state.bricks[b]!;
       const hit = circleRectHit(ball, brick);
       if (!hit) continue;
-      reflect(ball, hit);
+      // 反転しなかった接触 (すでに離れつつある) は押し戻すだけでダメージにしない
+      if (!reflect(ball, hit)) continue;
       brick.hp -= 1;
       state.score += SCORE_PER_HIT;
       state.speed = Math.min(BALL_MAX_SPEED, state.speed + BALL_SPEEDUP_PER_HIT);

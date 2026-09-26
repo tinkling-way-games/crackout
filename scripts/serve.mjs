@@ -1,13 +1,15 @@
-// 依存パッケージなしの静的ファイルサーバー。リポジトリ直下を配信する。
+// 依存パッケージなしの静的ファイルサーバー。ゲームに必要なファイルだけを配信する。
 //   node scripts/serve.mjs            → http://localhost:5173
 //   PORT=8080 node scripts/serve.mjs
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+/** 配信してよいのはこれだけ (.env や .claude/ などを誤って出さないよう許可リスト方式) */
+const ALLOWED = [/^\/$/, /^\/index\.html$/, /^\/dist\/[\w./-]+$/, /^\/docs\/images\/[\w./-]+$/];
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -18,30 +20,55 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
+/** @returns {Promise<{ status: number, file?: string }>} */
+async function resolve(url) {
+  let path;
+  try {
+    path = decodeURIComponent(new URL(url ?? '/', 'http://x').pathname);
+  } catch {
+    return { status: 400 };
+  }
+  if (!ALLOWED.some((re) => re.test(path)) || path.split('/').some((seg) => seg === '..' || seg.startsWith('.'))) {
+    return { status: 404 };
+  }
+  try {
+    let file = join(ROOT, path === '/' ? 'index.html' : path);
+    // シンボリックリンクで外へ出られないよう、実体のパスで確かめる
+    file = await realpath(file);
+    if (!file.startsWith(await realpath(ROOT) + sep) || !(await stat(file)).isFile()) return { status: 404 };
+    return { status: 200, file };
+  } catch {
+    return { status: 404 };
+  }
+}
+
 /** @param {number} port 0 なら空いているポートを使う */
 export function startServer(port = 5173) {
   const server = createServer(async (req, res) => {
-    const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
-    let file = normalize(join(ROOT, path));
-    // リポジトリの外は配信しない
-    if (!file.startsWith(ROOT) || file.split(sep).includes('.git')) {
-      res.writeHead(403).end();
-      return;
-    }
     try {
-      if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
-      await stat(file);
+      const { status, file } = await resolve(req.url);
+      if (!file) {
+        res.writeHead(status).end();
+        return;
+      }
+      const stream = createReadStream(file);
+      stream.on('error', () => {
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      });
+      stream.once('open', () => {
+        res.writeHead(200, {
+          'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+          'cache-control': 'no-store',
+        });
+        stream.pipe(res);
+      });
     } catch {
-      res.writeHead(404).end('Not Found');
-      return;
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
     }
-    res.writeHead(200, {
-      'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
-      'cache-control': 'no-store',
-    });
-    createReadStream(file).pipe(res);
   });
-  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+  return new Promise((ok) => server.listen(port, '127.0.0.1', () => ok(server)));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

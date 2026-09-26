@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { HEIGHT, INITIAL_LIVES, WIDTH } from '../../src/game/constants.ts';
 import { createGame, update } from '../../src/game/game.ts';
 import { LEVELS } from '../../src/game/levels.ts';
-import { NO_INPUT, type GameState, type Input } from '../../src/game/types.ts';
+import { NO_INPUT, type Brick, type GameState, type Input } from '../../src/game/types.ts';
 
 const DT = 1 / 120;
 const input = (patch: Partial<Input> = {}): Input => ({ ...NO_INPUT, ...patch });
@@ -88,6 +88,48 @@ describe('反射とブロック', () => {
     assert.equal(s.score, 10 + 10 + 80);
   });
 
+  it('角をかすめても、1回の接触で削れる耐久値は1だけ', () => {
+    const levels = [['...3......']];
+    for (let deg = -80; deg <= 80; deg += 2) {
+      for (let off = -12; off <= 12; off += 1) {
+        const s = launched(levels);
+        const brick = s.bricks[0]!;
+        const a = (deg * Math.PI) / 180;
+        // ブロック下辺の左端付近 (off = 0 が左下の角) を狙って撃つ
+        const tx = brick.x + off;
+        const ty = brick.y + brick.h;
+        Object.assign(s.ball, {
+          x: tx - Math.sin(a) * 60,
+          y: ty + Math.cos(a) * 60,
+          vx: Math.sin(a) * s.speed,
+          vy: -Math.cos(a) * s.speed,
+        });
+        let first = -1;
+        let hits = 0;
+        for (let i = 0; i < 40 && s.phase === 'playing'; i++) {
+          update(s, NO_INPUT, DT, levels);
+          const h = s.events.filter((e) => e.startsWith('brick')).length;
+          if (h && first < 0) first = i;
+          if (h && i - first <= 3) hits += h;
+        }
+        assert.ok(hits <= 1, `deg=${deg} off=${off} で ${hits} 回連続で当たった`);
+      }
+    }
+  });
+
+  it('2つのブロックの継ぎ目に当たっても、削れるのは1個だけで跳ね返る', () => {
+    const levels = [['...11.....']];
+    const s = launched(levels);
+    const [a, b] = s.bricks as [Brick, Brick];
+    const seam = (a.x + a.w + b.x) / 2;
+    Object.assign(s.ball, { x: seam, y: a.y + a.h + 30, vx: 0, vy: -s.speed });
+    for (let i = 0; i < 30 && s.ball.vy < 0; i++) update(s, NO_INPUT, DT, levels);
+    assert.equal(s.bricks.length, 1);
+    assert.ok(s.ball.vy > 0);
+    for (let i = 0; i < 10; i++) update(s, NO_INPUT, DT, levels);
+    assert.equal(s.bricks.length, 1, '跳ね返った後にもう1個を削らない');
+  });
+
   it('大きな dt でもブロックをすり抜けない', () => {
     const s = launched(ONE_BRICK);
     const brick = s.bricks[0]!;
@@ -95,6 +137,27 @@ describe('反射とブロック', () => {
     Object.assign(s.ball, { x: brick.x + brick.w / 2, y: brick.y + 200, vx: 0, vy: -720 });
     update(s, NO_INPUT, 0.25, ONE_BRICK);
     assert.notEqual(s.phase, 'playing', '当たって全消し → クリアになる');
+  });
+});
+
+describe('パドル', () => {
+  it('上から当たると打ち返す', () => {
+    const s = launched(ONE_BRICK);
+    const p = s.paddle;
+    Object.assign(s.ball, { x: p.x + p.w / 2, y: p.y - 30, vx: 0, vy: s.speed });
+    for (let i = 0; i < 20 && s.ball.vy > 0; i++) update(s, input({ pointerX: p.x + p.w / 2 }), DT, ONE_BRICK);
+    assert.ok(s.ball.vy < 0);
+    assert.ok(s.events.includes('paddle'));
+  });
+
+  it('上面より下に来たボールは、パドルを横から寄せても拾えない', () => {
+    const s = launched(ONE_BRICK);
+    const p = s.paddle;
+    Object.assign(s.ball, { x: 100, y: p.y + p.h / 2, vx: 0, vy: s.speed });
+    // パドルの右端がボールに重なる位置へ瞬間移動
+    update(s, input({ pointerX: 100 - p.w / 2 + 2 }), DT, ONE_BRICK);
+    assert.ok(s.ball.vy > 0, '下向きのまま');
+    assert.ok(!s.events.includes('paddle'));
   });
 });
 
@@ -157,6 +220,18 @@ describe('一時停止', () => {
     assert.deepEqual({ x: s.ball.x, y: s.ball.y }, { x, y });
     update(s, input({ pause: true }), DT);
     assert.equal(s.phase, 'playing');
+  });
+
+  it('プレイ中以外 (待機・クリア・ゲームオーバー) では一時停止しない', () => {
+    const s = createGame();
+    update(s, input({ pause: true }), DT);
+    assert.equal(s.phase, 'ready');
+    s.phase = 'levelClear';
+    update(s, input({ pause: true }), DT);
+    assert.equal(s.phase, 'levelClear');
+    s.phase = 'gameOver';
+    update(s, input({ pause: true }), DT);
+    assert.equal(s.phase, 'gameOver');
   });
 });
 

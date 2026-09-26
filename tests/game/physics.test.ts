@@ -16,26 +16,54 @@ describe('circleRectHit', () => {
 
   it('上から当たると上向きの法線', () => {
     const hit = circleRectHit(ball(140, 95), rect);
-    assert.deepEqual(hit, { nx: 0, ny: -1, depth: 3 });
+    assert.ok(hit);
+    assert.deepEqual([hit.nx, hit.ny], [0, -1]);
+    assert.ok(close(hit.px, 0) && Math.abs(hit.py + 3) < 1e-5, 'めり込み3px分だけ上へ押し戻す');
   });
 
   it('横から当たると横向きの法線', () => {
     const hit = circleRectHit(ball(185, 110), rect);
-    assert.deepEqual(hit, { nx: 1, ny: 0, depth: 3 });
+    assert.ok(hit);
+    assert.deepEqual([hit.nx, hit.ny], [1, 0]);
+    assert.ok(Math.abs(hit.px - 3) < 1e-5 && close(hit.py, 0));
   });
 
   it('中心がめり込んでいても一番近い辺から押し出す', () => {
     const hit = circleRectHit(ball(140, 118), rect);
     assert.ok(hit);
     assert.equal(hit.ny, 1);
-    assert.equal(hit.depth, 2 + 8);
+    assert.equal(hit.py, 2 + 8);
+  });
+
+  it('角では、ボールが向かってきている軸を法線に選ぶ', () => {
+    // 左下の角。x のずれの方が大きいが、ボールは左へ離れつつ上へ向かっている → y 軸
+    const hit = circleRectHit(ball(95, 123, -200, -300), rect);
+    assert.ok(hit);
+    assert.deepEqual([hit.nx, hit.ny], [0, 1]);
+  });
+
+  it('角では実際の方向に押し戻し、接触を解消する', () => {
+    const b = ball(95, 123, -200, -300);
+    const hit = circleRectHit(b, rect);
+    assert.ok(hit);
+    reflect(b, hit);
+    assert.equal(circleRectHit(b, rect), null);
+  });
+
+  it('角に両方向から向かってきたら、両軸とも反転して来た方向へ返す', () => {
+    const b = ball(95, 123, 200, -300);
+    const hit = circleRectHit(b, rect);
+    assert.ok(hit);
+    assert.deepEqual([hit.nx, hit.ny], [-1, 1]);
+    reflect(b, hit);
+    assert.deepEqual([b.vx, b.vy], [-200, 300]);
   });
 });
 
 describe('reflect', () => {
   it('面に向かっているときだけ反転し、めり込みを戻す', () => {
     const b = ball(140, 95, 50, 100);
-    reflect(b, { nx: 0, ny: -1, depth: 3 });
+    assert.equal(reflect(b, { nx: 0, ny: -1, px: 0, py: -3 }), true);
     assert.equal(b.vy, -100);
     assert.equal(b.vx, 50);
     assert.equal(b.y, 92);
@@ -43,7 +71,7 @@ describe('reflect', () => {
 
   it('すでに離れる向きなら反転しない (二重反転の防止)', () => {
     const b = ball(140, 95, 0, -100);
-    reflect(b, { nx: 0, ny: -1, depth: 3 });
+    assert.equal(reflect(b, { nx: 0, ny: -1, px: 0, py: -3 }), false);
     assert.equal(b.vy, -100);
   });
 });
