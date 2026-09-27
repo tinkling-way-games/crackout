@@ -29,6 +29,7 @@
 - テストを消したり skip したりして緑にしない。失敗の根本原因を直す。
 - 依存パッケージの追加は、理由を PR 説明に書く。
 - `.env` や秘密情報を読まない・書かない・ログに出さない。
+- リポジトリは public。README は遊ぶ人向け (ゲームの紹介が主題、Claude Code で作ったことは副題)。開発手順は `docs/DEVELOPMENT.md`、自走の仕組みは `docs/AUTONOMOUS_DEV.md` に書き、README に作業メモを足さない。
 - 分からないことが作業の方向を変える場合だけ人間に聞く。それ以外は妥当な既定値で進め、判断を記録する。
 
 ## コマンド
@@ -44,3 +45,4 @@
 - 自走の手順: `.claude/skills/autopilot/SKILL.md`
 - PR 運用のルール: `.claude/skills/steward/SKILL.md`
 - 進捗ログ: `docs/PROGRESS.md` / バックログ: `docs/TASKS.md`
+- 開発・公開の手順: `docs/DEVELOPMENT.md` / 自走の仕組みの解説: `docs/AUTONOMOUS_DEV.md`
