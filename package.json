@@ -1,8 +1,8 @@
 {
-  "name": "breakout",
+  "name": "crackout",
   "version": "0.1.0",
   "private": true,
-  "description": "ブラウザで動くブロック崩し (TypeScript)",
+  "description": "Crackout — ガラスのブロック崩し (TypeScript + Canvas 2D)",
   "type": "module",
   "engines": {
     "node": ">=22.18"
