@@ -115,8 +115,8 @@ Claude Code に「タスクを渡したら、計画・実装・検証・記録�
 │   ├── TASKS.md                  # バックログ (Inbox → Ready → Doing → Done)
 │   └── PROGRESS.md               # セッションをまたぐ作業記憶
 └── .github/
-    ├── workflows/claude.yml      # Issue/PR で @claude と呼ぶと動く
     ├── workflows/ci.yml          # verify.sh を CI でも実行
+    ├── workflows/pages.yml       # main を GitHub Pages に公開
     └── ISSUE_TEMPLATE/task.md    # 受け入れ条件つきタスクのひな形
 ```
 
@@ -128,7 +128,7 @@ Claude Code に「タスクを渡したら、計画・実装・検証・記録�
 4. `docs/TASKS.md` の `## Ready` にタスクを書く
 5. `claude` を起動して `/autopilot` と打つ
 
-GitHub から回したい場合は、`claude` 内で `/install-github-app` を実行し、Issue テンプレート「タスク (Claude に任せる)」で Issue を立てる。
+Issue テンプレート「タスク」で Issue を立て、`/autopilot <Issue 番号>` のようにローカルの `claude` に渡すこともできる。GitHub Actions から Claude を呼ぶ仕組み (@claude メンション) は、public リポジトリで外部の書き込みを読ませないために置いていない。
 
 ---
 

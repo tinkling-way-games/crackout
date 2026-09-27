@@ -1,8 +1,7 @@
 ---
-name: タスク (Claude に任せる)
-about: Claude Code が自走で実装できる粒度のタスク
+name: タスク
+about: 受け入れ条件つきのタスク (ローカルの Claude Code で /autopilot に渡せる粒度)
 title: ""
-labels: ["claude"]
 ---
 
 ## 目的
@@ -18,6 +17,3 @@ labels: ["claude"]
 
 ## 参考
 <!-- 関連ファイル、既存の似た実装、仕様へのリンク -->
-
----
-@claude このタスクを autopilot スキルの手順で実装し、PR を作成して

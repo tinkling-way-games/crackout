@@ -155,3 +155,10 @@
 - 完了 (2026-09-27 02:00 JST): ユーザーが crackout を **public** に変更 (Org を Team にする代わりに)、Pages の Source を GitHub Actions に設定し、「Deploy to GitHub Pages」を手動実行して成功。新 URL https://tinkling-way-games.github.io/crackout/ をブラウザで開き、タイトル・HUD・ブロック配置が表示され、`dist/` 配下のスクリプトが全て 200 で読み込まれることを確認。上記 5 (Secrets) と 6 (旧 URL の差し替え) はユーザー側で引き続き
 - 判断と理由: public 化を選んだのは、知り合いに配るゲームで隠す理由がなく、Org の有料化を避けられるため。public になったので `.github/workflows/` の内容も外から見えるが、Secrets の値は露出しない
 
+
+## 2026-09-27 セキュリティレビューと @claude ワークフローの削除
+- やったこと: ソース全体と git 履歴をセキュリティ観点で確認した。確認したのは、機微情報を含まないこと・個人情報を預からないこと・外部にデータを送らないこと。3点とも問題なし (秘密情報は現在のファイルにも履歴にもない。保存するのはハイスコアの score/stage/date だけで localStorage 止まり。`src/` に外部と通信する処理はなく、実行時の依存もゼロ)。そのうえで `.github/workflows/claude.yml` を削除し、それを前提にしていた Issue テンプレートの `@claude` 行と `claude` ラベル、README の説明を直した
+- 判断と理由:
+  - GitHub から Claude を呼ぶ仕組みは不要とユーザーが判断した。public リポジトリで Issue やコメントの本文 (外部の人も書ける) を書き込み権限つきの Claude に読ませる入口になるので、無効化ではなくファイルごと消した
+  - 1件だけ個人ドメインのメールアドレスで作られたコミット (8017655) があるが、公開しているアドレスなので、ユーザーの判断でそのままにする
+- 次にやること: ユーザー側で Settings → Secrets and variables → Actions の `CLAUDE_CODE_OAUTH_TOKEN` を削除し、必要なら Claude GitHub App をアンインストールする (上の 2026-09-27 残課題 5 は不要になった)
