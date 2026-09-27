@@ -150,9 +150,9 @@
   2. 新リポジトリの Settings → Pages → Source を「GitHub Actions」にする
   3. Settings → Environments → `github-pages` → Deployment branches に `main` があるか確認 (移管で環境設定が残っているかは要確認)
   4. Actions タブ → 「Deploy to GitHub Pages」を手動実行 (workflow_dispatch) し、新 URL で動くことを確認
-  5. Actions の Secrets (`CLAUDE_CODE_OAUTH_TOKEN`) が移管後も残っているか確認。消えていれば `claude.yml` (@claude メンション) が動かないので再登録
+  5. Actions の Secrets (`CLAUDE_CODE_OAUTH_TOKEN`) が移管後も残っているか確認。消えていれば `claude.yml` (@claude メンション) が動かないので再登録 → **不要になった** (同日、`claude.yml` を削除した。後述のセキュリティレビューの節を参照)
   6. 知り合いに配った旧 URL は差し替えが必要 (リダイレクトされない)
-- 完了 (2026-09-27 02:00 JST): ユーザーが crackout を **public** に変更 (Org を Team にする代わりに)、Pages の Source を GitHub Actions に設定し、「Deploy to GitHub Pages」を手動実行して成功。新 URL https://tinkling-way-games.github.io/crackout/ をブラウザで開き、タイトル・HUD・ブロック配置が表示され、`dist/` 配下のスクリプトが全て 200 で読み込まれることを確認。上記 5 (Secrets) と 6 (旧 URL の差し替え) はユーザー側で引き続き
+- 完了 (2026-09-27 02:00 JST): ユーザーが crackout を **public** に変更 (Org を Team にする代わりに)、Pages の Source を GitHub Actions に設定し、「Deploy to GitHub Pages」を手動実行して成功。新 URL https://tinkling-way-games.github.io/crackout/ をブラウザで開き、タイトル・HUD・ブロック配置が表示され、`dist/` 配下のスクリプトが全て 200 で読み込まれることを確認。上記 6 (旧 URL の差し替え) はユーザー側で引き続き (5 は `claude.yml` の削除で不要になった)
 - 判断と理由: public 化を選んだのは、知り合いに配るゲームで隠す理由がなく、Org の有料化を避けられるため。public になったので `.github/workflows/` の内容も外から見えるが、Secrets の値は露出しない
 
 
@@ -168,3 +168,10 @@
   - README から Pages の移管の経緯などの内部向けの記述は外した (手順は DEVELOPMENT.md に残した)
   - スクリーンショットは既存のものを流用。localStorage のキー `breakout.highScores` や `window.__breakout` は保存データ互換のため変えない
 - 次にやること: (ユーザー) GitHub のリポジトリ About 欄 (説明・Website・Topics) をゲーム紹介に合わせると、一覧でも外向きに見える
+
+## 2026-09-27 セキュリティレビューと @claude ワークフローの削除
+- やったこと: ソース全体と git 履歴をセキュリティ観点で確認した。確認したのは、機微情報を含まないこと・個人情報を預からないこと・外部にデータを送らないこと。3点とも問題なし (秘密情報は現在のファイルにも履歴にもない。保存するのはハイスコアの score/stage/date だけで localStorage 止まり。`src/` に外部と通信する処理はなく、実行時の依存もゼロ)。そのうえで `.github/workflows/claude.yml` を削除し、それを前提にしていた Issue テンプレートの `@claude` 行と `claude` ラベル、`docs/AUTONOMOUS_DEV.md` の説明を直した (PR #3 でテンプレートの解説が README から移ったため)。Copilot のレビュー指摘を受けて、上の Pages 再公開の節の残課題 5 にも「不要になった」と注記した
+- 判断と理由:
+  - GitHub から Claude を呼ぶ仕組みは不要とユーザーが判断した。public リポジトリで Issue やコメントの本文 (外部の人も書ける) を書き込み権限つきの Claude に読ませる入口になるので、無効化ではなくファイルごと消した
+  - 1件だけ個人ドメインのメールアドレスで作られたコミット (8017655) があるが、公開しているアドレスなので、ユーザーの判断でそのままにする
+- 次にやること: ユーザー側で Settings → Secrets and variables → Actions の `CLAUDE_CODE_OAUTH_TOKEN` を削除し、必要なら Claude GitHub App をアンインストールする (上の 2026-09-27 残課題 5 は不要になった)
