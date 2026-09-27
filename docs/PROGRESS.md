@@ -155,3 +155,16 @@
 - 完了 (2026-09-27 02:00 JST): ユーザーが crackout を **public** に変更 (Org を Team にする代わりに)、Pages の Source を GitHub Actions に設定し、「Deploy to GitHub Pages」を手動実行して成功。新 URL https://tinkling-way-games.github.io/crackout/ をブラウザで開き、タイトル・HUD・ブロック配置が表示され、`dist/` 配下のスクリプトが全て 200 で読み込まれることを確認。上記 5 (Secrets) と 6 (旧 URL の差し替え) はユーザー側で引き続き
 - 判断と理由: public 化を選んだのは、知り合いに配るゲームで隠す理由がなく、Org の有料化を避けられるため。public になったので `.github/workflows/` の内容も外から見えるが、Secrets の値は露出しない
 
+
+## 2026-09-27 公開リポジトリ向けにドキュメントを外向きに整理
+- やったこと:
+  - README をゲームの紹介中心に書き直した (タイトル「Crackout — ガラスのブロック崩し」、遊ぶリンク、ガラス表現の特徴、操作、パワーアップ、ハイスコア)。「Claude Code で全自動で作った」は副題の節にし、根拠 (PROGRESS / TASKS) へのリンクを置いた
+  - 自走テンプレートの解説は `docs/AUTONOMOUS_DEV.md` に、手元での実行・コード構成・検証・Pages 公開の手順は `docs/DEVELOPMENT.md` に移した
+  - `index.html` のタイトル、`package.json` / `package-lock.json` の name を crackout に揃えた
+  - CLAUDE.md に「README は遊ぶ人向け。作業メモは docs/ に書く」を追加
+- 判断と理由:
+  - 「人間はゲームのコードを1行も書いていない」は git 履歴で確認した (人間の非マージコミットは `.claude/` の設定 5 行のみ)
+  - README の YAML フロントマターは GitHub で表として描画され外向きには見栄えが悪いので外した。callout は GitHub と Obsidian の両方で描画される `[!NOTE]` / `[!TIP]` / `[!IMPORTANT]` だけにした (`[!summary]` や折りたたみの `[!example]-` は GitHub で崩れる)
+  - README から Pages の移管の経緯などの内部向けの記述は外した (手順は DEVELOPMENT.md に残した)
+  - スクリーンショットは既存のものを流用。localStorage のキー `breakout.highScores` や `window.__breakout` は保存データ互換のため変えない
+- 次にやること: (ユーザー) GitHub のリポジトリ About 欄 (説明・Website・Topics) をゲーム紹介に合わせると、一覧でも外向きに見える
